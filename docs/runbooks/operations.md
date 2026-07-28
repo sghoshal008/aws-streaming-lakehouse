@@ -1,8 +1,8 @@
 # Operations & Interview Reference
 
 ```bash
-export AWS_REGION="${AWS_REGION:-ap-southeast-1}"
-export AWS_ACCOUNT_ID="<AWS_ACCOUNT_ID>"
+export AWS_REGION="ap-southeast-1"
+export AWS_ACCOUNT_ID="878670310452"
 export CONTROL_TABLE="iata-sales-iac-ingestion-control"
 ```
 
@@ -32,6 +32,29 @@ aws stepfunctions list-executions --state-machine-arn <STATE_MACHINE_ARN>   --re
 aws stepfunctions describe-execution --execution-arn <EXECUTION_ARN>   --region "$AWS_REGION"
 
 aws stepfunctions get-execution-history --execution-arn <EXECUTION_ARN>   --region "$AWS_REGION"
+
+
+INGESTION_ARN="$(aws cloudformation describe-stacks \
+  --stack-name iata-sales-iac \
+  --region "${AWS_REGION}" \
+  --query "Stacks[0].Outputs[?OutputKey=='IngestionStateMachineArn'].OutputValue | [0]" \
+  --output text)"
+
+aws stepfunctions start-execution \
+  --state-machine-arn "${INGESTION_ARN}" \
+  --input '{}' \
+  --region "${AWS_REGION}"
+
+SILVER_ARN="$(aws cloudformation describe-stacks \
+  --stack-name iata-sales-iac \
+  --region "${AWS_REGION}" \
+  --query "Stacks[0].Outputs[?OutputKey=='BronzeToSilverStateMachineArn'].OutputValue | [0]" \
+  --output text)"
+
+aws stepfunctions start-execution \
+  --state-machine-arn "${SILVER_ARN}" \
+  --input '{}' \
+  --region "${AWS_REGION}"
 ```
 
 ## DynamoDB
@@ -40,6 +63,34 @@ Ingestion runs:
 
 ```bash
 aws dynamodb scan --table-name "$CONTROL_TABLE" --region "$AWS_REGION"   --filter-expression "begins_with(pk, :p)"   --expression-attribute-values '{":p":{"S":"RUN#"}}'
+
+
+aws dynamodb scan \
+  --table-name "$CONTROL_TABLE" \
+  --region "$AWS_REGION" \
+  --filter-expression "begins_with(pk, :p) AND sk = :sk" \
+  --expression-attribute-values '{
+    ":p": {"S": "RUN#"},
+    ":sk": {"S": "METADATA"}
+  }' \
+  --query "Items[].{
+    run_id:run_id.S,
+    status:status.S,
+    stage:stage.S,
+    start_time:start_time.S,
+    end_time:end_time.S,
+    updated_at:updated_at.S,
+    source_name:source_name.S,
+    dataset_name:dataset_name.S,
+    source_file_name:source_file_name.S,
+    source_file_size_bytes:source_file_size_bytes.N,
+    source_file_id:source_file_id.S,
+    file_count:file_count.N,
+    archive_s3_uri:archive_s3_uri.S,
+    manifest_s3_uri:manifest_s3_uri.S
+  }" \
+  --output json \
+| jq 'sort_by(.updated_at // .end_time // .start_time // "") | reverse | .[:5]'
 ```
 
 One ingestion run:
@@ -48,10 +99,33 @@ One ingestion run:
 aws dynamodb get-item --table-name "$CONTROL_TABLE" --region "$AWS_REGION"   --key '{"pk":{"S":"RUN#<RUN_ID>"},"sk":{"S":"METADATA"}}'
 ```
 
+
+
 Bronze-to-Silver watermark:
 
 ```bash
 aws dynamodb get-item --table-name "$CONTROL_TABLE" --region "$AWS_REGION"   --key '{"pk":{"S":"PIPELINE#BRONZE_TO_SILVER"},"sk":{"S":"WATERMARK"}}'
+
+aws dynamodb scan \
+  --table-name "$CONTROL_TABLE" \
+  --region "$AWS_REGION" \
+  --filter-expression "pk = :pk AND sk = :sk" \
+  --expression-attribute-values '{
+    ":pk": {"S": "PIPELINE#BRONZE_TO_SILVER"},
+    ":sk": {"S": "WATERMARK"}
+  }' \
+  --query "Items[].{
+    last_snapshot_id:last_snapshot_id.N,
+    last_successful_ts:last_successful_ts.S,
+    bronze_records_read:bronze_records_read.N,
+    valid_records:valid_records.N,
+    duplicates_removed:duplicates_removed.N,
+    silver_records_processed:silver_records_processed.N,
+    quarantine_records:quarantine_records.N
+  }" \
+  --output json \
+| jq '.[0]'
+
 ```
 
 Important watermark fields: `last_snapshot_id`, `bronze_records_read`, `valid_records`, `quarantine_records`, `duplicates_removed`, `silver_records_processed`, `last_successful_ts`.
@@ -66,6 +140,28 @@ All Silver summaries:
 
 ```bash
 aws dynamodb scan --table-name "$CONTROL_TABLE" --region "$AWS_REGION"   --filter-expression "begins_with(pk, :p)"   --expression-attribute-values '{":p":{"S":"SILVER_RUN#"}}'
+
+
+aws dynamodb scan \
+  --table-name "$CONTROL_TABLE" \
+  --region "$AWS_REGION" \
+  --filter-expression "begins_with(pk, :p)" \
+  --expression-attribute-values '{
+    ":p": {"S": "SILVER_RUN#"}
+  }' \
+  --query "Items[].{
+    run_id:silver_run_id.S,
+    status:status.S,
+    completed_at:completed_at.S,
+    bronze_records_read:bronze_records_read.N,
+    valid_records:valid_records.N,
+    duplicates_removed:duplicates_removed.N,
+    silver_records_processed:silver_records_processed.N,
+    quarantine_records:quarantine_records.N
+  }" \
+  --output json \
+| jq 'sort_by(.completed_at // "") | reverse | .[:5]'
+
 ```
 
 ## Athena / Iceberg
