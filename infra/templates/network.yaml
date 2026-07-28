@@ -1,0 +1,561 @@
+AWSTemplateFormatVersion: '2010-09-09'
+
+Description: >
+  Network infrastructure for the IATA Sales IaC pipeline.
+  Creates a two-AZ VPC with public and private subnets, Internet Gateway,
+  a single NAT Gateway, an S3 Gateway VPC Endpoint, and security groups
+  for Lambda, AWS Glue, Amazon MSK, and MSK Connect.
+
+Parameters:
+
+  ProjectName:
+    Type: String
+    Default: iata-sales-iac
+    Description: Resource naming prefix.
+
+  VpcCidr:
+    Type: String
+    Default: 10.20.0.0/16
+
+  PublicSubnet1Cidr:
+    Type: String
+    Default: 10.20.101.0/24
+
+  PublicSubnet2Cidr:
+    Type: String
+    Default: 10.20.102.0/24
+
+  PrivateSubnet1Cidr:
+    Type: String
+    Default: 10.20.1.0/24
+
+  PrivateSubnet2Cidr:
+    Type: String
+    Default: 10.20.2.0/24
+
+
+Resources:
+
+  # ============================================================
+  # VPC
+  # ============================================================
+
+  VPC:
+    Type: AWS::EC2::VPC
+    Properties:
+      CidrBlock: !Ref VpcCidr
+      EnableDnsSupport: true
+      EnableDnsHostnames: true
+      InstanceTenancy: default
+      Tags:
+        - Key: Name
+          Value: !Sub '${ProjectName}-vpc'
+        - Key: Project
+          Value: !Ref ProjectName
+        - Key: ManagedBy
+          Value: CloudFormation
+
+
+  # ============================================================
+  # Internet Gateway
+  # ============================================================
+
+  InternetGateway:
+    Type: AWS::EC2::InternetGateway
+    Properties:
+      Tags:
+        - Key: Name
+          Value: !Sub '${ProjectName}-igw'
+        - Key: Project
+          Value: !Ref ProjectName
+        - Key: ManagedBy
+          Value: CloudFormation
+
+  InternetGatewayAttachment:
+    Type: AWS::EC2::VPCGatewayAttachment
+    Properties:
+      VpcId: !Ref VPC
+      InternetGatewayId: !Ref InternetGateway
+
+
+  # ============================================================
+  # Public Subnets
+  # ============================================================
+
+  PublicSubnet1:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC
+      AvailabilityZone: ap-southeast-1a
+      CidrBlock: !Ref PublicSubnet1Cidr
+      MapPublicIpOnLaunch: true
+      Tags:
+        - Key: Name
+          Value: !Sub '${ProjectName}-subnet-public-1a'
+        - Key: Project
+          Value: !Ref ProjectName
+        - Key: ManagedBy
+          Value: CloudFormation
+
+  PublicSubnet2:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC
+      AvailabilityZone: ap-southeast-1b
+      CidrBlock: !Ref PublicSubnet2Cidr
+      MapPublicIpOnLaunch: true
+      Tags:
+        - Key: Name
+          Value: !Sub '${ProjectName}-subnet-public-1b'
+        - Key: Project
+          Value: !Ref ProjectName
+        - Key: ManagedBy
+          Value: CloudFormation
+
+
+  # ============================================================
+  # Private Subnets
+  # ============================================================
+
+  PrivateSubnet1:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC
+      AvailabilityZone: ap-southeast-1a
+      CidrBlock: !Ref PrivateSubnet1Cidr
+      MapPublicIpOnLaunch: false
+      Tags:
+        - Key: Name
+          Value: !Sub '${ProjectName}-subnet-private-1a'
+        - Key: Project
+          Value: !Ref ProjectName
+        - Key: ManagedBy
+          Value: CloudFormation
+
+  PrivateSubnet2:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC
+      AvailabilityZone: ap-southeast-1b
+      CidrBlock: !Ref PrivateSubnet2Cidr
+      MapPublicIpOnLaunch: false
+      Tags:
+        - Key: Name
+          Value: !Sub '${ProjectName}-subnet-private-1b'
+        - Key: Project
+          Value: !Ref ProjectName
+        - Key: ManagedBy
+          Value: CloudFormation
+
+
+  # ============================================================
+  # NAT Gateway
+  # ============================================================
+
+  NatGatewayEIP:
+    Type: AWS::EC2::EIP
+    DependsOn: InternetGatewayAttachment
+    Properties:
+      Domain: vpc
+      Tags:
+        - Key: Name
+          Value: !Sub '${ProjectName}-nat-eip'
+        - Key: Project
+          Value: !Ref ProjectName
+        - Key: ManagedBy
+          Value: CloudFormation
+
+  NatGateway:
+    Type: AWS::EC2::NatGateway
+    Properties:
+      AllocationId: !GetAtt NatGatewayEIP.AllocationId
+      SubnetId: !Ref PublicSubnet1
+      Tags:
+        - Key: Name
+          Value: !Sub '${ProjectName}-nat-gw'
+        - Key: Project
+          Value: !Ref ProjectName
+        - Key: ManagedBy
+          Value: CloudFormation
+
+
+  # ============================================================
+  # Public Route Table
+  # ============================================================
+
+  PublicRouteTable:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref VPC
+      Tags:
+        - Key: Name
+          Value: !Sub '${ProjectName}-rtb-public'
+        - Key: Project
+          Value: !Ref ProjectName
+        - Key: ManagedBy
+          Value: CloudFormation
+
+  PublicDefaultRoute:
+    Type: AWS::EC2::Route
+    DependsOn: InternetGatewayAttachment
+    Properties:
+      RouteTableId: !Ref PublicRouteTable
+      DestinationCidrBlock: 0.0.0.0/0
+      GatewayId: !Ref InternetGateway
+
+  PublicSubnet1RouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref PublicSubnet1
+      RouteTableId: !Ref PublicRouteTable
+
+  PublicSubnet2RouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref PublicSubnet2
+      RouteTableId: !Ref PublicRouteTable
+
+
+  # ============================================================
+  # Private Route Tables
+  # ============================================================
+
+  PrivateRouteTable1:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref VPC
+      Tags:
+        - Key: Name
+          Value: !Sub '${ProjectName}-rtb-private-1a'
+        - Key: Project
+          Value: !Ref ProjectName
+        - Key: ManagedBy
+          Value: CloudFormation
+
+  PrivateRouteTable2:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref VPC
+      Tags:
+        - Key: Name
+          Value: !Sub '${ProjectName}-rtb-private-1b'
+        - Key: Project
+          Value: !Ref ProjectName
+        - Key: ManagedBy
+          Value: CloudFormation
+
+  PrivateDefaultRoute1:
+    Type: AWS::EC2::Route
+    Properties:
+      RouteTableId: !Ref PrivateRouteTable1
+      DestinationCidrBlock: 0.0.0.0/0
+      NatGatewayId: !Ref NatGateway
+
+  PrivateDefaultRoute2:
+    Type: AWS::EC2::Route
+    Properties:
+      RouteTableId: !Ref PrivateRouteTable2
+      DestinationCidrBlock: 0.0.0.0/0
+      NatGatewayId: !Ref NatGateway
+
+  PrivateSubnet1RouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref PrivateSubnet1
+      RouteTableId: !Ref PrivateRouteTable1
+
+  PrivateSubnet2RouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref PrivateSubnet2
+      RouteTableId: !Ref PrivateRouteTable2
+
+
+  # ============================================================
+  # S3 Gateway VPC Endpoint
+  # ============================================================
+
+  S3GatewayEndpoint:
+    Type: AWS::EC2::VPCEndpoint
+    Properties:
+      VpcId: !Ref VPC
+      VpcEndpointType: Gateway
+      ServiceName: !Sub 'com.amazonaws.${AWS::Region}.s3'
+      RouteTableIds:
+        - !Ref PrivateRouteTable1
+        - !Ref PrivateRouteTable2
+      Tags:
+        - Key: Name
+          Value: !Sub '${ProjectName}-vpce-s3'
+        - Key: Project
+          Value: !Ref ProjectName
+        - Key: ManagedBy
+          Value: CloudFormation
+
+
+  # ============================================================
+  # Security Groups
+  # ============================================================
+
+  # ------------------------------------------------------------
+  # Acquisition Lambda
+  #
+  # No inbound connectivity is required.
+  # HTTPS egress is sufficient for external source download and
+  # AWS HTTPS API access when the Lambda is VPC attached.
+  # ------------------------------------------------------------
+
+  LambdaSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupName: !Sub '${ProjectName}-lambda-sg'
+      GroupDescription: Security group for IATA Sales acquisition Lambda
+      VpcId: !Ref VPC
+      SecurityGroupEgress:
+        - IpProtocol: tcp
+          FromPort: 443
+          ToPort: 443
+          CidrIp: 0.0.0.0/0
+          Description: Allow HTTPS outbound traffic
+      Tags:
+        - Key: Name
+          Value: !Sub '${ProjectName}-lambda-sg'
+        - Key: Project
+          Value: !Ref ProjectName
+        - Key: ManagedBy
+          Value: CloudFormation
+
+
+  # ------------------------------------------------------------
+  # AWS Glue
+  #
+  # Glue Spark workers require communication among themselves.
+  # Self-referencing TCP access is therefore provided.
+  # ------------------------------------------------------------
+
+  GlueSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupName: !Sub '${ProjectName}-glue-sg'
+      GroupDescription: Security group for IATA Sales Glue Spark jobs
+      VpcId: !Ref VPC
+      SecurityGroupEgress:
+        - IpProtocol: '-1'
+          CidrIp: 0.0.0.0/0
+          Description: Allow outbound traffic required by Glue
+      Tags:
+        - Key: Name
+          Value: !Sub '${ProjectName}-glue-sg'
+        - Key: Project
+          Value: !Ref ProjectName
+        - Key: ManagedBy
+          Value: CloudFormation
+
+  GlueSelfIngress:
+    Type: AWS::EC2::SecurityGroupIngress
+    Properties:
+      GroupId: !Ref GlueSecurityGroup
+      IpProtocol: tcp
+      FromPort: 0
+      ToPort: 65535
+      SourceSecurityGroupId: !Ref GlueSecurityGroup
+      Description: Allow Glue Spark worker communication within the security group
+
+
+  # ------------------------------------------------------------
+  # MSK Connect Iceberg Sink
+  #
+  # No inbound access required.
+  # HTTPS is needed for AWS APIs/S3/Glue Catalog.
+  # Kafka IAM traffic to MSK is explicitly limited to TCP 9098.
+  # ------------------------------------------------------------
+
+  MSKConnectSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupName: !Sub '${ProjectName}-sink-connect-sg'
+      GroupDescription: Security group for IATA Sales Iceberg sink connector
+      VpcId: !Ref VPC
+      SecurityGroupEgress:
+        - IpProtocol: tcp
+          FromPort: 443
+          ToPort: 443
+          CidrIp: 0.0.0.0/0
+          Description: Allow HTTPS access to AWS services
+      Tags:
+        - Key: Name
+          Value: !Sub '${ProjectName}-sink-connect-sg'
+        - Key: Project
+          Value: !Ref ProjectName
+        - Key: ManagedBy
+          Value: CloudFormation
+
+
+  # ------------------------------------------------------------
+  # Amazon MSK
+  #
+  # Only the Glue producer and MSK Connect sink are allowed to
+  # connect to IAM-authenticated Kafka brokers on TCP 9098.
+  # ------------------------------------------------------------
+
+  MSKSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupName: !Sub '${ProjectName}-msk-sg'
+      GroupDescription: Security group for IATA Sales Amazon MSK brokers
+      VpcId: !Ref VPC
+      SecurityGroupEgress:
+        - IpProtocol: '-1'
+          CidrIp: 0.0.0.0/0
+          Description: Allow broker outbound traffic
+      Tags:
+        - Key: Name
+          Value: !Sub '${ProjectName}-msk-sg'
+        - Key: Project
+          Value: !Ref ProjectName
+        - Key: ManagedBy
+          Value: CloudFormation
+
+
+  # ============================================================
+  # Explicit MSK connectivity
+  # ============================================================
+
+  GlueEgressToMSK:
+    Type: AWS::EC2::SecurityGroupEgress
+    Properties:
+      GroupId: !Ref GlueSecurityGroup
+      IpProtocol: tcp
+      FromPort: 9098
+      ToPort: 9098
+      DestinationSecurityGroupId: !Ref MSKSecurityGroup
+      Description: Allow Glue producer to connect to MSK using IAM authentication
+
+  MSKIngressFromGlue:
+    Type: AWS::EC2::SecurityGroupIngress
+    Properties:
+      GroupId: !Ref MSKSecurityGroup
+      IpProtocol: tcp
+      FromPort: 9098
+      ToPort: 9098
+      SourceSecurityGroupId: !Ref GlueSecurityGroup
+      Description: Allow Glue producer to connect using IAM authenticated Kafka
+
+
+  MSKConnectEgressToMSK:
+    Type: AWS::EC2::SecurityGroupEgress
+    Properties:
+      GroupId: !Ref MSKConnectSecurityGroup
+      IpProtocol: tcp
+      FromPort: 9098
+      ToPort: 9098
+      DestinationSecurityGroupId: !Ref MSKSecurityGroup
+      Description: Allow Iceberg sink connector to reach MSK brokers
+
+  MSKIngressFromConnect:
+    Type: AWS::EC2::SecurityGroupIngress
+    Properties:
+      GroupId: !Ref MSKSecurityGroup
+      IpProtocol: tcp
+      FromPort: 9098
+      ToPort: 9098
+      SourceSecurityGroupId: !Ref MSKConnectSecurityGroup
+      Description: Allow Iceberg sink connector to connect using IAM authenticated Kafka
+
+
+Outputs:
+
+  VpcId:
+    Description: IATA Sales IaC VPC ID
+    Value: !Ref VPC
+    Export:
+      Name: !Sub '${ProjectName}-VpcId'
+
+  VpcCidr:
+    Description: IATA Sales IaC VPC CIDR
+    Value: !Ref VpcCidr
+    Export:
+      Name: !Sub '${ProjectName}-VpcCidr'
+
+
+  PublicSubnet1Id:
+    Description: Public subnet in ap-southeast-1a
+    Value: !Ref PublicSubnet1
+    Export:
+      Name: !Sub '${ProjectName}-PublicSubnet1Id'
+
+  PublicSubnet2Id:
+    Description: Public subnet in ap-southeast-1b
+    Value: !Ref PublicSubnet2
+    Export:
+      Name: !Sub '${ProjectName}-PublicSubnet2Id'
+
+
+  PrivateSubnet1Id:
+    Description: Private subnet in ap-southeast-1a
+    Value: !Ref PrivateSubnet1
+    Export:
+      Name: !Sub '${ProjectName}-PrivateSubnet1Id'
+
+  PrivateSubnet2Id:
+    Description: Private subnet in ap-southeast-1b
+    Value: !Ref PrivateSubnet2
+    Export:
+      Name: !Sub '${ProjectName}-PrivateSubnet2Id'
+
+
+  PublicRouteTableId:
+    Description: Public route table ID
+    Value: !Ref PublicRouteTable
+    Export:
+      Name: !Sub '${ProjectName}-PublicRouteTableId'
+
+  PrivateRouteTable1Id:
+    Description: Private route table for ap-southeast-1a
+    Value: !Ref PrivateRouteTable1
+    Export:
+      Name: !Sub '${ProjectName}-PrivateRouteTable1Id'
+
+  PrivateRouteTable2Id:
+    Description: Private route table for ap-southeast-1b
+    Value: !Ref PrivateRouteTable2
+    Export:
+      Name: !Sub '${ProjectName}-PrivateRouteTable2Id'
+
+
+  LambdaSecurityGroupId:
+    Description: Acquisition Lambda security group ID
+    Value: !Ref LambdaSecurityGroup
+    Export:
+      Name: !Sub '${ProjectName}-LambdaSecurityGroupId'
+
+  GlueSecurityGroupId:
+    Description: Glue security group ID
+    Value: !Ref GlueSecurityGroup
+    Export:
+      Name: !Sub '${ProjectName}-GlueSecurityGroupId'
+
+  MSKConnectSecurityGroupId:
+    Description: MSK Connect security group ID
+    Value: !Ref MSKConnectSecurityGroup
+    Export:
+      Name: !Sub '${ProjectName}-MSKConnectSecurityGroupId'
+
+  MSKSecurityGroupId:
+    Description: Amazon MSK broker security group ID
+    Value: !Ref MSKSecurityGroup
+    Export:
+      Name: !Sub '${ProjectName}-MSKSecurityGroupId'
+
+
+  NatGatewayId:
+    Description: NAT Gateway ID
+    Value: !Ref NatGateway
+    Export:
+      Name: !Sub '${ProjectName}-NatGatewayId'
+
+  S3GatewayEndpointId:
+    Description: S3 Gateway VPC Endpoint ID
+    Value: !Ref S3GatewayEndpoint
+    Export:
+      Name: !Sub '${ProjectName}-S3GatewayEndpointId'

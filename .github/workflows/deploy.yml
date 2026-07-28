@@ -1,0 +1,75 @@
+name: Deploy IaC - Demo Reference
+
+# ------------------------------------------------------------------
+# DEMO / REFERENCE ONLY
+#
+# This workflow is intentionally disabled.
+#
+# It has no workflow_dispatch, push, pull_request, schedule, or other
+# trigger, so committing this file does NOT deploy anything and does
+# NOT expose a "Run workflow" button in GitHub Actions.
+#
+# The actual case-study deployment entry point is:
+#
+#   ./infra/scripts/deploy-wrapper.sh create
+#
+# The file is retained only to demonstrate how GitHub Actions CD could
+# use OIDC to assume an AWS deployment role in a production evolution.
+# ------------------------------------------------------------------
+
+on: []
+
+permissions:
+  id-token: write
+  contents: read
+
+jobs:
+  deploy-reference:
+    name: Disabled deployment reference
+    if: ${{ false }}
+    runs-on: ubuntu-latest
+
+    env:
+      AWS_REGION: ${{ vars.AWS_REGION }}
+      AWS_ACCOUNT_ID: ${{ vars.AWS_ACCOUNT_ID }}
+      ALERT_EMAIL: ${{ secrets.ALERT_EMAIL }}
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Configure AWS credentials with GitHub OIDC
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ vars.AWS_ROLE_TO_ASSUME }}
+          aws-region: ${{ vars.AWS_REGION }}
+
+      - name: Install validation tooling
+        run: |
+          python -m pip install --upgrade pip
+          pip install cfn-lint
+
+      - name: Make scripts executable
+        run: chmod +x infra/scripts/*.sh
+
+      - name: Validate repository
+        run: ./infra/scripts/validate.sh
+
+      # Intentionally no package/deploy commands.
+      #
+      # A future production CD workflow could call:
+      #
+      #   ./infra/scripts/deploy-wrapper.sh create
+      #
+      # after adding controlled handling for the external Iceberg
+      # Kafka Connect plugin artifact and configuring the AWS OIDC
+      # deployment role.
+      - name: Deployment intentionally disabled
+        run: |
+          echo "Reference workflow only."
+          echo "No AWS infrastructure deployment is performed."

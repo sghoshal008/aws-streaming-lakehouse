@@ -1,0 +1,26 @@
+# Python virtual environment
+.venv/
+venv/
+
+# Python caches
+__pycache__/
+*.py[cod]
+.ruff_cache/
+.pytest_cache/
+
+# macOS
+.DS_Store
+
+# IDE
+.vscode/
+.idea/
+
+# Environment / secrets
+.env
+.env.*
+
+# Build/runtime artefacts that should not be committed
+*.log
+
+# Generated deployment artifacts
+dependencies/msk-connect/iceberg/*.zip

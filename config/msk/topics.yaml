@@ -1,0 +1,15 @@
+topics:
+  - name: iata-sales-iac-records
+    partitions: 6
+    replication_factor: 2
+    purpose: Main sales records produced by Landing-to-MSK Glue job
+
+  - name: iata-sales-iac-errors
+    partitions: 3
+    replication_factor: 2
+    purpose: Invalid or failed records from the ingestion pipeline
+
+  - name: iata-sales-iac-control-iceberg
+    partitions: 1
+    replication_factor: 2
+    purpose: Iceberg Kafka Connect control topic

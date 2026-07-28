@@ -1,0 +1,1122 @@
+AWSTemplateFormatVersion: '2010-09-09'
+
+Description: >
+  Monitoring and operational observability for the IATA Sales IaC pipeline.
+  Creates the CloudWatch operational dashboard and alarms for acquisition,
+  Step Functions, Amazon MSK and the Iceberg MSK Connect sink.
+
+# ============================================================
+# Parameters
+# ============================================================
+
+Parameters:
+
+  ProjectName:
+    Type: String
+    Default: iata-sales-iac
+    Description: Common resource naming prefix.
+
+  # ----------------------------------------------------------
+  # SNS
+  # ----------------------------------------------------------
+
+  NotificationTopicArn:
+    Type: String
+    Description: >
+      SNS topic ARN created by messaging.yaml and used by
+      CloudWatch alarms.
+
+  # ----------------------------------------------------------
+  # Compute
+  # ----------------------------------------------------------
+
+  AcquisitionLambdaName:
+    Type: String
+    Default: iata-sales-iac-acquisition
+
+  LandingToMSKGlueJobName:
+    Type: String
+    Default: iata-sales-iac-landing-to-msk
+
+  BronzeToSilverGlueJobName:
+    Type: String
+    Default: iata-sales-iac-bronze-to-silver
+
+  # ----------------------------------------------------------
+  # Step Functions
+  # ----------------------------------------------------------
+
+  IngestionStateMachineArn:
+    Type: String
+    Description: ARN of the ingestion Step Functions state machine.
+
+  BronzeToSilverStateMachineArn:
+    Type: String
+    Description: ARN of the Bronze-to-Silver state machine.
+
+  # ----------------------------------------------------------
+  # Amazon MSK
+  # ----------------------------------------------------------
+
+  MSKClusterName:
+    Type: String
+    Default: iata-sales-iac-msk
+
+  MainKafkaTopic:
+    Type: String
+    Default: iata-sales-iac-records
+
+  # Used only by the topic-throughput dashboard widget.
+  # We can verify/change this after the new cluster is running.
+  MSKDashboardBrokerId:
+    Type: String
+    Default: '2'
+
+  # ----------------------------------------------------------
+  # MSK Connect
+  # ----------------------------------------------------------
+
+  MSKConnectConnectorName:
+    Type: String
+    Default: iata-sales-iac-iceberg-sink
+
+  # Expected Kafka Connect consumer-group convention.
+  # Verify this after the IaC connector is running.
+  MSKConnectConsumerGroup:
+    Type: String
+    Default: connect-iata-sales-iac-iceberg-sink
+
+  # ----------------------------------------------------------
+  # Cost governance
+  # ----------------------------------------------------------
+
+  MonthlyBudgetAmount:
+    Type: Number
+    Default: 50
+    MinValue: 1
+    Description: >
+      Monthly account-level AWS cost budget in USD used for the
+      case-study cost guardrail.
+
+  BudgetAlertEmail:
+    Type: String
+    Default: ''
+    Description: >
+      Optional email address for AWS Budget alerts. Leave blank
+      to deploy the dashboard without creating the AWS Budget.
+
+
+# ============================================================
+# Conditions
+# ============================================================
+
+Conditions:
+
+  HasBudgetAlertEmail:
+    !Not
+      - !Equals
+        - !Ref BudgetAlertEmail
+        - ''
+
+
+# ============================================================
+# Resources
+# ============================================================
+
+Resources:
+
+  # ==========================================================
+  # CLOUDWATCH DASHBOARD
+  # ==========================================================
+
+  PipelineDashboard:
+    Type: AWS::CloudWatch::Dashboard
+
+    Properties:
+
+      DashboardName:
+        !Sub '${ProjectName}-pipeline'
+
+      Tags:
+        - Key: Project
+          Value: !Ref ProjectName
+
+        - Key: ManagedBy
+          Value: CloudFormation
+
+      DashboardBody:
+        !Sub |
+          {
+            "start": "-PT6H",
+            "periodOverride": "inherit",
+
+            "widgets": [
+
+              {
+                "type": "text",
+                "x": 0,
+                "y": 0,
+                "width": 24,
+                "height": 3,
+
+                "properties": {
+                  "markdown": "# ⚡ IATA Sales Pipeline | System Health\n\n**Deployment:** `IaC` &nbsp;&nbsp; **Region:** `${AWS::Region}` &nbsp;&nbsp; **Pipeline:** `Sales`\n\n> **Operational Overview** — Ingestion • Streaming • Iceberg Lakehouse • Transformation"
+                }
+              },
+
+
+              {
+                "type": "metric",
+                "x": 0,
+                "y": 3,
+                "width": 6,
+                "height": 3,
+
+                "properties": {
+
+                  "metrics": [
+                    [
+                      "AWS/Lambda",
+                      "Errors",
+                      "FunctionName",
+                      "${AcquisitionLambdaName}"
+                    ]
+                  ],
+
+                  "sparkline": true,
+                  "view": "singleValue",
+                  "region": "${AWS::Region}",
+                  "title": "Acquisition - Errors",
+                  "stat": "Sum",
+                  "period": 300
+                }
+              },
+
+
+              {
+                "type": "metric",
+                "x": 6,
+                "y": 3,
+                "width": 12,
+                "height": 3,
+
+                "properties": {
+
+                  "metrics": [
+
+                    [
+                      "AWS/States",
+                      "ExecutionsFailed",
+                      "StateMachineArn",
+                      "${IngestionStateMachineArn}",
+                      {
+                        "label": "Ingestion Failures"
+                      }
+                    ],
+
+                    [
+                      "...",
+                      "${BronzeToSilverStateMachineArn}",
+                      {
+                        "label": "Bronze → Silver Failures"
+                      }
+                    ]
+                  ],
+
+                  "sparkline": true,
+                  "view": "singleValue",
+                  "region": "${AWS::Region}",
+                  "stat": "Sum",
+                  "period": 300,
+                  "title": "Pipeline - Failed Executions"
+                }
+              },
+
+
+              {
+                "type": "metric",
+                "x": 18,
+                "y": 3,
+                "width": 6,
+                "height": 3,
+
+                "properties": {
+
+                  "metrics": [
+                    [
+                      "AWS/Kafka",
+                      "MaxOffsetLag",
+                      "Consumer Group",
+                      "${MSKConnectConsumerGroup}",
+                      "Cluster Name",
+                      "${MSKClusterName}",
+                      "Topic",
+                      "${MainKafkaTopic}",
+                      {
+                        "label": "Iceberg Sink Lag"
+                      }
+                    ]
+                  ],
+
+                  "sparkline": true,
+                  "view": "singleValue",
+                  "region": "${AWS::Region}",
+                  "stat": "Maximum",
+                  "period": 300,
+                  "title": "MSK - Iceberg Sink Lag"
+                }
+              },
+
+
+              {
+                "type": "metric",
+                "x": 0,
+                "y": 6,
+                "width": 24,
+                "height": 3,
+
+                "properties": {
+
+                  "metrics": [
+
+                    [
+                      "AWS/KafkaConnect",
+                      "WorkerCount",
+                      "ConnectorName",
+                      "${MSKConnectConnectorName}",
+                      {
+                        "label": "Workers"
+                      }
+                    ],
+
+                    [
+                      ".",
+                      "ErroredTaskCount",
+                      ".",
+                      ".",
+                      {
+                        "stat": "Maximum",
+                        "label": "Errored Tasks"
+                      }
+                    ],
+
+                    [
+                      ".",
+                      "RunningTaskCount",
+                      ".",
+                      ".",
+                      {
+                        "label": "Running Tasks"
+                      }
+                    ]
+                  ],
+
+                  "sparkline": true,
+                  "view": "singleValue",
+                  "region": "${AWS::Region}",
+                  "stat": "Minimum",
+                  "period": 300,
+                  "title": "Iceberg Sink Health"
+                }
+              },
+
+
+              {
+                "type": "text",
+                "x": 0,
+                "y": 9,
+                "width": 24,
+                "height": 2,
+
+                "properties": {
+                  "markdown": "## 📊 Pipeline Throughput\nEnd-to-end record flow from Kafka ingestion through Iceberg Bronze and Silver processing"
+                }
+              },
+
+
+              {
+                "type": "metric",
+                "x": 0,
+                "y": 11,
+                "width": 4,
+                "height": 5,
+
+                "properties": {
+
+                  "metrics": [
+                    [
+                      "AWS/States",
+                      "ExecutionTime",
+                      "StateMachineArn",
+                      "${IngestionStateMachineArn}",
+                      {
+                        "label": "Acquisition → MSK"
+                      }
+                    ]
+                  ],
+
+                  "sparkline": true,
+                  "view": "singleValue",
+                  "region": "${AWS::Region}",
+                  "title": "Ingestion - Processing Duration",
+                  "stat": "Average",
+                  "period": 300
+                }
+              },
+
+
+              {
+                "type": "metric",
+                "x": 4,
+                "y": 11,
+                "width": 7,
+                "height": 5,
+
+                "properties": {
+
+                  "metrics": [
+                    [
+                      "AWS/Kafka",
+                      "BytesInPerSec",
+                      "Cluster Name",
+                      "${MSKClusterName}",
+                      "Broker ID",
+                      "${MSKDashboardBrokerId}",
+                      "Topic",
+                      "${MainKafkaTopic}",
+                      {
+                        "label": "Kafka Inbound"
+                      }
+                    ]
+                  ],
+
+                  "view": "timeSeries",
+                  "stacked": false,
+                  "region": "${AWS::Region}",
+                  "title": "MSK - Sales Topic Throughput",
+                  "stat": "Average",
+                  "period": 60
+                }
+              },
+
+
+              {
+                "type": "metric",
+                "x": 11,
+                "y": 11,
+                "width": 7,
+                "height": 5,
+
+                "properties": {
+
+                  "metrics": [
+
+                    [
+                      "AWS/KafkaConnect",
+                      "SinkRecordReadRate",
+                      "ConnectorName",
+                      "${MSKConnectConnectorName}",
+                      {
+                        "label": "Records Read/sec"
+                      }
+                    ],
+
+                    [
+                      ".",
+                      "SinkRecordSendRate",
+                      ".",
+                      ".",
+                      {
+                        "label": "Records Written/sec"
+                      }
+                    ]
+                  ],
+
+                  "view": "timeSeries",
+                  "stacked": false,
+                  "region": "${AWS::Region}",
+                  "stat": "Average",
+                  "period": 60,
+                  "title": "Iceberg Sink - Record Throughput"
+                }
+              },
+
+
+              {
+                "type": "metric",
+                "x": 18,
+                "y": 11,
+                "width": 6,
+                "height": 5,
+
+                "properties": {
+
+                  "metrics": [
+                    [
+                      "AWS/States",
+                      "ExecutionTime",
+                      "StateMachineArn",
+                      "${BronzeToSilverStateMachineArn}",
+                      {
+                        "label": "Processing Duration"
+                      }
+                    ]
+                  ],
+
+                  "sparkline": true,
+                  "view": "singleValue",
+                  "region": "${AWS::Region}",
+                  "title": "Bronze → Silver - Processing Duration",
+                  "stat": "Average",
+                  "period": 300
+                }
+              },
+
+
+              {
+                "type": "text",
+                "x": 0,
+                "y": 16,
+                "width": 24,
+                "height": 2,
+
+                "properties": {
+                  "markdown": "## 🛡️ Reliability & Failure Recovery\nTechnical failures trigger alarms and SNS notifications. Business DQ exceptions are quarantined and warned without failing successful processing."
+                }
+              },
+
+
+              {
+                "type": "metric",
+                "x": 0,
+                "y": 18,
+                "width": 8,
+                "height": 4,
+
+                "properties": {
+
+                  "metrics": [
+                    [
+                      "AWS/Lambda",
+                      "Errors",
+                      "FunctionName",
+                      "${AcquisitionLambdaName}",
+                      {
+                        "label": "Acquisition Errors"
+                      }
+                    ]
+                  ],
+
+                  "sparkline": true,
+                  "view": "singleValue",
+                  "region": "${AWS::Region}",
+                  "stat": "Sum",
+                  "period": 300,
+                  "title": "Acquisition Reliability"
+                }
+              },
+
+
+              {
+                "type": "metric",
+                "x": 8,
+                "y": 18,
+                "width": 8,
+                "height": 4,
+
+                "properties": {
+
+                  "metrics": [
+                    [
+                      "AWS/States",
+                      "ExecutionsFailed",
+                      "StateMachineArn",
+                      "${IngestionStateMachineArn}",
+                      {
+                        "label": "Ingestion"
+                      }
+                    ],
+
+                    [
+                      "...",
+                      "${BronzeToSilverStateMachineArn}",
+                      {
+                        "label": "Bronze → Silver"
+                      }
+                    ]
+                  ],
+
+                  "sparkline": true,
+                  "view": "singleValue",
+                  "region": "${AWS::Region}",
+                  "stat": "Sum",
+                  "period": 300,
+                  "title": "Pipeline Failures"
+                }
+              },
+
+
+              {
+                "type": "metric",
+                "x": 16,
+                "y": 18,
+                "width": 8,
+                "height": 4,
+
+                "properties": {
+
+                  "metrics": [
+                    [
+                      "AWS/KafkaConnect",
+                      "ErroredTaskCount",
+                      "ConnectorName",
+                      "${MSKConnectConnectorName}",
+                      {
+                        "label": "Errored Tasks"
+                      }
+                    ]
+                  ],
+
+                  "sparkline": true,
+                  "view": "singleValue",
+                  "region": "${AWS::Region}",
+                  "stat": "Maximum",
+                  "period": 300,
+                  "title": "Iceberg Sink - Errors"
+                }
+              },
+
+
+              {
+                "type": "text",
+                "x": 0,
+                "y": 22,
+                "width": 24,
+                "height": 2,
+
+                "properties": {
+                  "markdown": "## 💰 Cost & Resource Efficiency\nBilling is shown separately from workload metrics. **Estimated AWS Charges is account-wide**, while the other widgets show major resource-consumption drivers for this pipeline."
+                }
+              },
+
+
+              {
+                "type": "metric",
+                "x": 0,
+                "y": 24,
+                "width": 8,
+                "height": 5,
+
+                "properties": {
+
+                  "metrics": [
+                    [
+                      "AWS/Billing",
+                      "EstimatedCharges",
+                      "Currency",
+                      "USD",
+                      {
+                        "label": "Account Estimated Charges"
+                      }
+                    ]
+                  ],
+
+                  "sparkline": true,
+                  "view": "singleValue",
+                  "region": "us-east-1",
+                  "title": "AWS Billing - Estimated Charges (USD)",
+                  "stat": "Maximum",
+                  "period": 21600
+                }
+              },
+
+
+              {
+                "type": "metric",
+                "x": 8,
+                "y": 24,
+                "width": 8,
+                "height": 5,
+
+                "properties": {
+
+                  "metrics": [
+                    [
+                      "AWS/Kafka",
+                      "KafkaDataLogsDiskUsed",
+                      "Cluster Name",
+                      "${MSKClusterName}",
+                      "Broker ID",
+                      "${MSKDashboardBrokerId}",
+                      {
+                        "label": "Broker Storage Used"
+                      }
+                    ]
+                  ],
+
+                  "view": "timeSeries",
+                  "stacked": false,
+                  "region": "${AWS::Region}",
+                  "title": "MSK - Storage Consumption",
+                  "stat": "Maximum",
+                  "period": 300
+                }
+              },
+
+
+              {
+                "type": "metric",
+                "x": 16,
+                "y": 24,
+                "width": 8,
+                "height": 5,
+
+                "properties": {
+
+                  "metrics": [
+                    [
+                      "AWS/KafkaConnect",
+                      "WorkerCount",
+                      "ConnectorName",
+                      "${MSKConnectConnectorName}",
+                      {
+                        "label": "Provisioned Workers"
+                      }
+                    ]
+                  ],
+
+                  "sparkline": true,
+                  "view": "singleValue",
+                  "region": "${AWS::Region}",
+                  "title": "MSK Connect - Worker Capacity",
+                  "stat": "Maximum",
+                  "period": 300
+                }
+              },
+
+
+              {
+                "type": "metric",
+                "x": 0,
+                "y": 29,
+                "width": 8,
+                "height": 5,
+
+                "properties": {
+
+                  "metrics": [
+                    [
+                      "AWS/Lambda",
+                      "Invocations",
+                      "FunctionName",
+                      "${AcquisitionLambdaName}",
+                      {
+                        "label": "Invocations"
+                      }
+                    ],
+                    [
+                      ".",
+                      "Duration",
+                      ".",
+                      ".",
+                      {
+                        "label": "Avg Duration (ms)",
+                        "stat": "Average"
+                      }
+                    ]
+                  ],
+
+                  "view": "timeSeries",
+                  "stacked": false,
+                  "region": "${AWS::Region}",
+                  "title": "Lambda - Usage Driver",
+                  "stat": "Sum",
+                  "period": 300
+                }
+              },
+
+
+              {
+                "type": "metric",
+                "x": 8,
+                "y": 29,
+                "width": 8,
+                "height": 5,
+
+                "properties": {
+
+                  "metrics": [
+                    [
+                      "AWS/States",
+                      "ExecutionTime",
+                      "StateMachineArn",
+                      "${IngestionStateMachineArn}",
+                      {
+                        "label": "Ingestion Duration"
+                      }
+                    ],
+                    [
+                      "...",
+                      "${BronzeToSilverStateMachineArn}",
+                      {
+                        "label": "Bronze → Silver Duration"
+                      }
+                    ]
+                  ],
+
+                  "view": "timeSeries",
+                  "stacked": false,
+                  "region": "${AWS::Region}",
+                  "title": "Glue-Orchestrated Processing Duration",
+                  "stat": "Average",
+                  "period": 300
+                }
+              },
+
+
+              {
+                "type": "text",
+                "x": 16,
+                "y": 29,
+                "width": 8,
+                "height": 5,
+
+                "properties": {
+                  "markdown": "### Cost interpretation\n**Major continuous drivers:** MSK broker hours/storage and MSK Connect MCU capacity.\n\n**Variable drivers:** Glue DPU runtime, NAT processing, S3 and CloudWatch.\n\nThe billing widget requires **Billing alerts** to be enabled in AWS Billing Preferences."
+                }
+              }
+            ]
+          }
+
+
+  # ==========================================================
+  # ALARM - Acquisition Lambda
+  # ==========================================================
+
+  AcquisitionLambdaErrorAlarm:
+    Type: AWS::CloudWatch::Alarm
+
+    Properties:
+
+      AlarmName:
+        !Sub '${ProjectName}-acquisition-errors'
+
+      AlarmDescription: >
+        Alarm when the Acquisition Lambda reports one or more
+        errors within a five-minute period.
+
+      Namespace: AWS/Lambda
+
+      MetricName: Errors
+
+      Dimensions:
+
+        - Name: FunctionName
+          Value: !Ref AcquisitionLambdaName
+
+      Statistic: Sum
+
+      Period: 300
+
+      EvaluationPeriods: 1
+
+      DatapointsToAlarm: 1
+
+      Threshold: 1
+
+      ComparisonOperator: GreaterThanOrEqualToThreshold
+
+      TreatMissingData: notBreaching
+
+      AlarmActions:
+        - !Ref NotificationTopicArn
+
+
+  # ==========================================================
+  # ALARM - Ingestion State Machine
+  # ==========================================================
+
+  IngestionStateMachineFailureAlarm:
+    Type: AWS::CloudWatch::Alarm
+
+    Properties:
+
+      AlarmName:
+        !Sub '${ProjectName}-ingestion-pipeline-failed'
+
+      AlarmDescription: >
+        Alarm when the IATA Sales ingestion state machine fails.
+
+      Namespace: AWS/States
+
+      MetricName: ExecutionsFailed
+
+      Dimensions:
+
+        - Name: StateMachineArn
+          Value: !Ref IngestionStateMachineArn
+
+      Statistic: Sum
+
+      Period: 300
+
+      EvaluationPeriods: 1
+
+      DatapointsToAlarm: 1
+
+      Threshold: 1
+
+      ComparisonOperator: GreaterThanOrEqualToThreshold
+
+      TreatMissingData: notBreaching
+
+      AlarmActions:
+        - !Ref NotificationTopicArn
+
+
+  # ==========================================================
+  # ALARM - Bronze -> Silver State Machine
+  # ==========================================================
+
+  BronzeToSilverStateMachineFailureAlarm:
+    Type: AWS::CloudWatch::Alarm
+
+    Properties:
+
+      AlarmName:
+        !Sub '${ProjectName}-bronze-to-silver-pipeline-failed'
+
+      AlarmDescription: >
+        Alarm when the Bronze-to-Silver technical pipeline fails.
+
+      Namespace: AWS/States
+
+      MetricName: ExecutionsFailed
+
+      Dimensions:
+
+        - Name: StateMachineArn
+          Value: !Ref BronzeToSilverStateMachineArn
+
+      Statistic: Sum
+
+      Period: 300
+
+      EvaluationPeriods: 1
+
+      DatapointsToAlarm: 1
+
+      Threshold: 1
+
+      ComparisonOperator: GreaterThanOrEqualToThreshold
+
+      TreatMissingData: notBreaching
+
+      AlarmActions:
+        - !Ref NotificationTopicArn
+
+
+  # ==========================================================
+  # ALARM - MSK Connect Errored Tasks
+  #
+  # AWS publishes ErroredTaskCount for MSK Connect.
+  # ==========================================================
+
+  IcebergSinkErroredTaskAlarm:
+    Type: AWS::CloudWatch::Alarm
+
+    Properties:
+
+      AlarmName:
+        !Sub '${ProjectName}-iceberg-sink-errored-task'
+
+      AlarmDescription: >
+        Alarm when one or more Iceberg sink connector tasks
+        enter an errored state.
+
+      Namespace: AWS/KafkaConnect
+
+      MetricName: ErroredTaskCount
+
+      Dimensions:
+
+        - Name: ConnectorName
+          Value: !Ref MSKConnectConnectorName
+
+      Statistic: Maximum
+
+      Period: 300
+
+      EvaluationPeriods: 1
+
+      DatapointsToAlarm: 1
+
+      Threshold: 1
+
+      ComparisonOperator: GreaterThanOrEqualToThreshold
+
+      TreatMissingData: notBreaching
+
+      AlarmActions:
+        - !Ref NotificationTopicArn
+
+
+  # ==========================================================
+  # ALARM - MSK Active Controller
+  #
+  # Healthy MSK cluster should report an active controller.
+  # ==========================================================
+
+  MSKActiveControllerAlarm:
+    Type: AWS::CloudWatch::Alarm
+
+    Properties:
+
+      AlarmName:
+        !Sub '${ProjectName}-msk-controller-unavailable'
+
+      AlarmDescription: >
+        Alarm when the MSK cluster does not report an active
+        Kafka controller.
+
+      Namespace: AWS/Kafka
+
+      MetricName: ActiveControllerCount
+
+      Dimensions:
+
+        - Name: Cluster Name
+          Value: !Ref MSKClusterName
+
+      Statistic: Maximum
+
+      Period: 300
+
+      EvaluationPeriods: 2
+
+      DatapointsToAlarm: 2
+
+      Threshold: 1
+
+      ComparisonOperator: LessThanThreshold
+
+      TreatMissingData: breaching
+
+      AlarmActions:
+        - !Ref NotificationTopicArn
+
+
+  # ==========================================================
+  # COST GUARDRAIL - AWS Budget
+  #
+  # This is deliberately account-level for the case-study account.
+  # Project-scoped budgets based on cost-allocation tags require
+  # those tags to be activated in Billing and can take time to appear.
+  # ==========================================================
+
+  ProjectMonthlyCostBudget:
+    Type: AWS::Budgets::Budget
+    Condition: HasBudgetAlertEmail
+
+    Properties:
+
+      Budget:
+        BudgetName:
+          !Sub '${ProjectName}-monthly-cost-budget'
+
+        BudgetLimit:
+          Amount: !Ref MonthlyBudgetAmount
+          Unit: USD
+
+        BudgetType: COST
+        TimeUnit: MONTHLY
+
+      NotificationsWithSubscribers:
+
+        - Notification:
+            NotificationType: ACTUAL
+            ComparisonOperator: GREATER_THAN
+            Threshold: 80
+            ThresholdType: PERCENTAGE
+
+          Subscribers:
+            - SubscriptionType: EMAIL
+              Address: !Ref BudgetAlertEmail
+
+        - Notification:
+            NotificationType: ACTUAL
+            ComparisonOperator: GREATER_THAN
+            Threshold: 100
+            ThresholdType: PERCENTAGE
+
+          Subscribers:
+            - SubscriptionType: EMAIL
+              Address: !Ref BudgetAlertEmail
+
+
+# ============================================================
+# Outputs
+# ============================================================
+
+Outputs:
+
+  PipelineDashboardName:
+
+    Description: IATA Sales operational CloudWatch dashboard
+
+    Value:
+      !Ref PipelineDashboard
+
+    Export:
+
+      Name:
+        !Sub '${ProjectName}-PipelineDashboardName'
+
+
+  AcquisitionLambdaErrorAlarmName:
+
+    Description: Acquisition Lambda error alarm
+
+    Value:
+      !Ref AcquisitionLambdaErrorAlarm
+
+
+  IngestionFailureAlarmName:
+
+    Description: Ingestion Step Functions failure alarm
+
+    Value:
+      !Ref IngestionStateMachineFailureAlarm
+
+
+  BronzeToSilverFailureAlarmName:
+
+    Description: Bronze-to-Silver failure alarm
+
+    Value:
+      !Ref BronzeToSilverStateMachineFailureAlarm
+
+
+  IcebergSinkErroredTaskAlarmName:
+
+    Description: MSK Connect errored task alarm
+
+    Value:
+      !Ref IcebergSinkErroredTaskAlarm
+
+
+  MSKActiveControllerAlarmName:
+
+    Description: MSK controller availability alarm
+
+    Value:
+      !Ref MSKActiveControllerAlarm
+
+  ProjectMonthlyCostBudgetName:
+
+    Condition: HasBudgetAlertEmail
+
+    Description: AWS Budgets monthly account-level cost guardrail
+
+    Value:
+      !Ref ProjectMonthlyCostBudget

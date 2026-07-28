@@ -1,0 +1,778 @@
+AWSTemplateFormatVersion: '2010-09-09'
+
+Description: >
+  Messaging and streaming infrastructure for the IATA Sales IaC pipeline.
+  Creates SNS pipeline alerts, Amazon MSK, AWS Glue Schema Registry,
+  MSK Connect logging, an Iceberg custom plugin, and the Iceberg sink connector.
+
+Parameters:
+
+  ProjectName:
+    Type: String
+    Default: iata-sales-iac
+    Description: Common resource naming prefix.
+
+  # ------------------------------------------------------------
+  # Network values supplied by network.yaml
+  # ------------------------------------------------------------
+
+  PrivateSubnet1Id:
+    Type: AWS::EC2::Subnet::Id
+    Description: Private subnet in ap-southeast-1a.
+
+  PrivateSubnet2Id:
+    Type: AWS::EC2::Subnet::Id
+    Description: Private subnet in ap-southeast-1b.
+
+  MSKSecurityGroupId:
+    Type: AWS::EC2::SecurityGroup::Id
+    Description: Security group used by the MSK brokers.
+
+  MSKConnectSecurityGroupId:
+    Type: AWS::EC2::SecurityGroup::Id
+    Description: Security group used by MSK Connect workers.
+
+
+  # ------------------------------------------------------------
+  # Storage values supplied by storage.yaml
+  # ------------------------------------------------------------
+
+  LakehouseBucketName:
+    Type: String
+    Description: IATA Sales lakehouse bucket name.
+
+  PluginsBucketName:
+    Type: String
+    Description: S3 bucket containing MSK Connect plugins.
+
+
+  # ------------------------------------------------------------
+  # IAM value supplied by iam.yaml
+  # ------------------------------------------------------------
+
+  IcebergSinkConnectRoleArn:
+    Type: String
+    Description: IAM execution role ARN used by the Iceberg sink connector.
+
+
+  # ------------------------------------------------------------
+  # Alerting
+  # ------------------------------------------------------------
+
+  AlertEmail:
+    Type: String
+    Default: 'sghoshal008@gmail.com'
+    Description: >
+      Optional email address for pipeline alerts.
+      Leave blank to create the SNS topic without an email subscription.
+
+
+  # ------------------------------------------------------------
+  # Amazon MSK
+  # ------------------------------------------------------------
+
+  KafkaVersion:
+    Type: String
+    Default: '3.6.0'
+
+  BrokerInstanceType:
+    Type: String
+    Default: kafka.t3.small
+
+  BrokerStorageGiB:
+    Type: Number
+    Default: 10
+
+  NumberOfBrokerNodes:
+    Type: Number
+    Default: 4
+
+
+  # ------------------------------------------------------------
+  # MSK Connect
+  #
+  # The connector is deliberately optional during the initial
+  # deployment because bootstrap servers are only known after
+  # the MSK cluster has been created.
+  # ------------------------------------------------------------
+
+  DeployIcebergConnector:
+    Type: String
+    Default: 'false'
+    AllowedValues:
+      - 'true'
+      - 'false'
+    Description: >
+      Set to true after MSK is running, Kafka topics exist,
+      the Iceberg plugin ZIP has been uploaded, and IAM bootstrap
+      servers have been retrieved.
+
+  MSKBootstrapServers:
+    Type: String
+    Default: ''
+    Description: >
+      IAM/TLS bootstrap servers for the IaC-created MSK cluster.
+      Required when DeployIcebergConnector=true.
+
+  IcebergPluginFileKey:
+    Type: String
+    Default: msk-connect/iceberg/iata-sales-iac-iceberg-sink-plugin.zip
+    Description: >
+      S3 object key of the Iceberg Kafka Connect plugin ZIP
+      inside the plugins bucket.
+
+  KafkaConnectVersion:
+    Type: String
+    Default: '3.7.x'
+
+
+Conditions:
+
+  HasAlertEmail:
+    !Not
+      - !Equals
+        - !Ref AlertEmail
+        - ''
+
+  CreateIcebergConnector:
+    !Equals
+      - !Ref DeployIcebergConnector
+      - 'true'
+
+
+Resources:
+
+  # ============================================================
+  # SNS - Pipeline Alerts
+  # ============================================================
+
+  PipelineAlertTopic:
+    Type: AWS::SNS::Topic
+    Properties:
+      TopicName: !Sub '${ProjectName}-pipeline-alerts'
+      DisplayName: IATA Sales Alerts
+
+      Tags:
+        - Key: Project
+          Value: !Ref ProjectName
+        - Key: Purpose
+          Value: PipelineAlerts
+        - Key: ManagedBy
+          Value: CloudFormation
+
+
+  PipelineAlertEmailSubscription:
+    Type: AWS::SNS::Subscription
+    Condition: HasAlertEmail
+    Properties:
+      TopicArn: !Ref PipelineAlertTopic
+      Protocol: email
+      Endpoint: !Ref AlertEmail
+
+
+  # ============================================================
+  # CloudWatch - MSK Broker Logs
+  # ============================================================
+
+  MSKBrokerLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub '/aws/msk/${ProjectName}-broker'
+      RetentionInDays: 14
+
+
+  # ============================================================
+  # Amazon MSK
+  # ============================================================
+
+  MSKCluster:
+    Type: AWS::MSK::Cluster
+    Properties:
+
+      ClusterName: !Sub '${ProjectName}-msk'
+
+      KafkaVersion: !Ref KafkaVersion
+
+      NumberOfBrokerNodes: !Ref NumberOfBrokerNodes
+
+      BrokerNodeGroupInfo:
+
+        BrokerAZDistribution: DEFAULT
+
+        InstanceType: !Ref BrokerInstanceType
+
+        ClientSubnets:
+          - !Ref PrivateSubnet1Id
+          - !Ref PrivateSubnet2Id
+
+        SecurityGroups:
+          - !Ref MSKSecurityGroupId
+
+        StorageInfo:
+          EBSStorageInfo:
+            VolumeSize: !Ref BrokerStorageGiB
+
+
+      # --------------------------------------------------------
+      # IAM authentication only
+      # --------------------------------------------------------
+
+      ClientAuthentication:
+
+        Sasl:
+          Iam:
+            Enabled: true
+
+        Unauthenticated:
+          Enabled: false
+
+
+      # --------------------------------------------------------
+      # TLS in transit
+      #
+      # No KMS key is specified for EncryptionAtRest so MSK
+      # uses the AWS-managed encryption configuration.
+      # --------------------------------------------------------
+
+      EncryptionInfo:
+
+        EncryptionInTransit:
+          ClientBroker: TLS
+          InCluster: true
+
+
+      # --------------------------------------------------------
+      # Monitoring
+      # --------------------------------------------------------
+
+      EnhancedMonitoring: DEFAULT
+
+      OpenMonitoring:
+        Prometheus:
+          JmxExporter:
+            EnabledInBroker: false
+          NodeExporter:
+            EnabledInBroker: false
+
+
+      # --------------------------------------------------------
+      # Broker logging
+      # --------------------------------------------------------
+
+      LoggingInfo:
+
+        BrokerLogs:
+
+          CloudWatchLogs:
+            Enabled: true
+            LogGroup: !Ref MSKBrokerLogGroup
+
+          Firehose:
+            Enabled: false
+
+          S3:
+            Enabled: false
+
+
+      StorageMode: LOCAL
+
+      Tags:
+        Project: !Ref ProjectName
+        ManagedBy: CloudFormation
+
+
+  # ============================================================
+  # Amazon MSK - Application Topics
+  #
+  # Kafka 3.6+ supports native MSK topic management through
+  # AWS APIs and CloudFormation, so no EC2 Kafka admin client
+  # is required for the IaC deployment.
+  # ============================================================
+
+  SalesRecordsTopic:
+    Type: AWS::MSK::Topic
+    Properties:
+      ClusterArn: !Ref MSKCluster
+      TopicName: !Sub '${ProjectName}-records'
+      PartitionCount: 6
+      ReplicationFactor: 2
+
+  SalesErrorsTopic:
+    Type: AWS::MSK::Topic
+    Properties:
+      ClusterArn: !Ref MSKCluster
+      TopicName: !Sub '${ProjectName}-errors'
+      PartitionCount: 3
+      ReplicationFactor: 2
+
+  IcebergControlTopic:
+    Type: AWS::MSK::Topic
+    Properties:
+      ClusterArn: !Ref MSKCluster
+      TopicName: !Sub '${ProjectName}-control-iceberg'
+      PartitionCount: 1
+      ReplicationFactor: 2
+
+
+  # ============================================================
+  # AWS Glue Schema Registry
+  #
+  # Option A:
+  # Registry infrastructure exists now, but the current producer
+  # continues to send normal JSON into Kafka.
+  # ============================================================
+
+  SalesSchemaRegistry:
+    Type: AWS::Glue::Registry
+    Properties:
+
+      Name: !Sub '${ProjectName}-schema-registry'
+
+      Description: >
+        Central schema registry for IATA Sales Kafka message
+        contracts and future schema-governed producers.
+
+      Tags:
+        - Key: Project
+          Value: !Ref ProjectName
+        - Key: Purpose
+          Value: KafkaSchemaGovernance
+        - Key: ManagedBy
+          Value: CloudFormation
+
+
+  SalesRecordSchema:
+    Type: AWS::Glue::Schema
+    Properties:
+
+      Name: !Sub '${ProjectName}-sales-record-schema'
+
+      Description: >
+        Initial JSON contract for IATA Sales Kafka records.
+        The current producer remains plain JSON and is not yet
+        coupled to Glue Schema Registry serialization.
+
+      Registry:
+        Arn: !GetAtt SalesSchemaRegistry.Arn
+
+      DataFormat: JSON
+
+      Compatibility: BACKWARD
+
+      # Intentionally permissive for the first governance-ready
+      # schema because the existing producer is not yet using
+      # registry serialization.
+      SchemaDefinition: |
+        {
+          "$schema": "http://json-schema.org/draft-07/schema#",
+          "title": "IATA Sales Bronze Record",
+          "description": "Governance contract matching the records published to iata-sales-iac-records",
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "region": {"type": ["string", "null"]},
+            "country": {"type": ["string", "null"]},
+            "item_type": {"type": ["string", "null"]},
+            "sales_channel": {"type": ["string", "null"]},
+            "order_priority": {"type": ["string", "null"]},
+            "order_date": {"type": ["string", "null"]},
+            "order_id": {"type": "string"},
+            "ship_date": {"type": ["string", "null"]},
+            "units_sold": {"type": ["string", "null"]},
+            "unit_price": {"type": ["string", "null"]},
+            "unit_cost": {"type": ["string", "null"]},
+            "total_revenue": {"type": ["string", "null"]},
+            "total_cost": {"type": ["string", "null"]},
+            "total_profit": {"type": ["string", "null"]},
+            "run_id": {"type": "string"},
+            "file_id": {"type": "string"},
+            "file_name": {"type": "string"},
+            "source_file_uri": {"type": "string"},
+            "source_name": {"type": "string"},
+            "dataset_name": {"type": "string"},
+            "manifest_key": {"type": "string"},
+            "glue_run_id": {"type": "string"},
+            "etl_create_ts": {"type": "string"}
+          },
+          "required": [
+            "order_id", "run_id", "file_id", "file_name",
+            "source_file_uri", "source_name", "dataset_name",
+            "manifest_key", "glue_run_id", "etl_create_ts"
+          ]
+        }
+
+      Tags:
+        - Key: Project
+          Value: !Ref ProjectName
+        - Key: Purpose
+          Value: SalesRecordContract
+        - Key: ManagedBy
+          Value: CloudFormation
+
+
+  # ============================================================
+  # CloudWatch - MSK Connect Logs
+  # ============================================================
+
+  MSKConnectLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+
+      LogGroupName: !Sub '/aws/msk-connect/${ProjectName}-iceberg-sink'
+
+      RetentionInDays: 14
+
+
+  # ============================================================
+  # MSK Connect - Custom Iceberg Plugin
+  #
+  # Created only during deployment phase 2.
+  # The plugin ZIP must already exist in the plugins bucket.
+  # ============================================================
+
+  IcebergSinkCustomPlugin:
+    Type: AWS::KafkaConnect::CustomPlugin
+    Condition: CreateIcebergConnector
+
+    Properties:
+
+      Name: !Sub '${ProjectName}-iceberg-sink-plugin'
+
+      Description: >
+        Apache Iceberg Kafka Connect sink plugin for the
+        IATA Sales Bronze Iceberg table.
+
+      ContentType: ZIP
+
+      Location:
+
+        S3Location:
+
+          BucketArn:
+            !Sub 'arn:${AWS::Partition}:s3:::${PluginsBucketName}'
+
+          FileKey: !Ref IcebergPluginFileKey
+
+      Tags:
+        - Key: Project
+          Value: !Ref ProjectName
+        - Key: ManagedBy
+          Value: CloudFormation
+
+
+  # ============================================================
+  # MSK Connect - Iceberg Sink Connector
+  # ============================================================
+
+  IcebergSinkConnector:
+    Type: AWS::KafkaConnect::Connector
+    Condition: CreateIcebergConnector
+
+    DependsOn:
+      - IcebergSinkCustomPlugin
+      - MSKCluster
+      - SalesRecordsTopic
+      - SalesErrorsTopic
+      - IcebergControlTopic
+      - MSKConnectLogGroup
+
+    Properties:
+
+      ConnectorName: !Sub '${ProjectName}-iceberg-sink'
+
+      ConnectorDescription: >
+        Consumes IATA Sales Kafka records and persists them
+        to the Bronze Apache Iceberg table in Amazon S3.
+
+
+      # --------------------------------------------------------
+      # Connector capacity
+      #
+      # Matches the working environment:
+      # 1 worker x 2 MCU
+      # --------------------------------------------------------
+
+      Capacity:
+
+        ProvisionedCapacity:
+
+          McuCount: 2
+
+          WorkerCount: 1
+
+
+      # --------------------------------------------------------
+      # Kafka Connect runtime
+      # --------------------------------------------------------
+
+      KafkaConnectVersion: !Ref KafkaConnectVersion
+
+      NetworkType: IPV4
+
+
+      # --------------------------------------------------------
+      # Kafka cluster
+      # --------------------------------------------------------
+
+      KafkaCluster:
+
+        ApacheKafkaCluster:
+
+          BootstrapServers: !Ref MSKBootstrapServers
+
+          Vpc:
+
+            SecurityGroups:
+              - !Ref MSKConnectSecurityGroupId
+
+            Subnets:
+              - !Ref PrivateSubnet1Id
+              - !Ref PrivateSubnet2Id
+
+
+      # --------------------------------------------------------
+      # Authentication / encryption
+      # --------------------------------------------------------
+
+      KafkaClusterClientAuthentication:
+
+        AuthenticationType: IAM
+
+
+      KafkaClusterEncryptionInTransit:
+
+        EncryptionType: TLS
+
+
+      # --------------------------------------------------------
+      # Custom Iceberg plugin
+      # --------------------------------------------------------
+
+      Plugins:
+
+        - CustomPlugin:
+
+            CustomPluginArn:
+              !GetAtt IcebergSinkCustomPlugin.CustomPluginArn
+
+            Revision:
+              !GetAtt IcebergSinkCustomPlugin.Revision
+
+
+      # --------------------------------------------------------
+      # IAM execution role
+      # --------------------------------------------------------
+
+      ServiceExecutionRoleArn: !Ref IcebergSinkConnectRoleArn
+
+
+      # --------------------------------------------------------
+      # Connector configuration
+      # --------------------------------------------------------
+
+      ConnectorConfiguration:
+
+        connector.class:
+          org.apache.iceberg.connect.IcebergSinkConnector
+
+        tasks.max:
+          '2'
+
+
+        # ------------------------------------------------------
+        # Kafka source
+        # ------------------------------------------------------
+
+        topics:
+          !Sub '${ProjectName}-records'
+
+
+        # ------------------------------------------------------
+        # Iceberg target
+        # ------------------------------------------------------
+
+        iceberg.tables:
+          iata_sales_iac_bronze.sales_raw
+
+        iceberg.tables.auto-create-enabled:
+          'false'
+
+        iceberg.tables.evolve-schema-enabled:
+          'false'
+
+
+        iceberg.catalog.catalog-impl:
+          org.apache.iceberg.aws.glue.GlueCatalog
+
+        iceberg.catalog.io-impl:
+          org.apache.iceberg.aws.s3.S3FileIO
+
+        iceberg.catalog.client.region:
+          !Ref AWS::Region
+
+        iceberg.catalog.warehouse:
+          !Sub 's3://${LakehouseBucketName}/bronze'
+
+
+        # ------------------------------------------------------
+        # Iceberg control topic
+        # ------------------------------------------------------
+
+        iceberg.control.topic:
+          !Sub '${ProjectName}-control-iceberg'
+
+        iceberg.control.commit.interval-ms:
+          '10000'
+
+
+        # ------------------------------------------------------
+        # Kafka converters
+        # ------------------------------------------------------
+
+        key.converter:
+          org.apache.kafka.connect.storage.StringConverter
+
+        value.converter:
+          org.apache.kafka.connect.json.JsonConverter
+
+        value.converter.schemas.enable:
+          'false'
+
+
+        # ------------------------------------------------------
+        # Error handling / DLQ
+        # ------------------------------------------------------
+
+        errors.tolerance:
+          all
+
+        errors.deadletterqueue.topic.name:
+          !Sub '${ProjectName}-errors'
+
+        errors.deadletterqueue.context.headers.enable:
+          'true'
+
+        errors.deadletterqueue.topic.replication.factor:
+          '2'
+
+
+      # --------------------------------------------------------
+      # Connector logs
+      # --------------------------------------------------------
+
+      LogDelivery:
+
+        WorkerLogDelivery:
+
+          CloudWatchLogs:
+
+            Enabled: true
+
+            LogGroup: !Ref MSKConnectLogGroup
+
+
+      Tags:
+
+        - Key: Project
+          Value: !Ref ProjectName
+
+        - Key: Purpose
+          Value: IcebergSink
+
+        - Key: ManagedBy
+          Value: CloudFormation
+
+
+Outputs:
+
+  # ============================================================
+  # SNS
+  # ============================================================
+
+  PipelineAlertTopicArn:
+    Description: SNS topic ARN used for pipeline failure and DQ alerts
+    Value: !Ref PipelineAlertTopic
+
+    Export:
+      Name: !Sub '${ProjectName}-PipelineAlertTopicArn'
+
+
+  PipelineAlertTopicName:
+    Description: SNS pipeline alert topic name
+    Value: !GetAtt PipelineAlertTopic.TopicName
+
+    Export:
+      Name: !Sub '${ProjectName}-PipelineAlertTopicName'
+
+
+  # ============================================================
+  # MSK
+  # ============================================================
+
+  MSKClusterArn:
+    Description: Amazon MSK cluster ARN
+    Value: !Ref MSKCluster
+
+    Export:
+      Name: !Sub '${ProjectName}-MSKClusterArn'
+
+
+  MSKClusterName:
+    Description: Amazon MSK cluster name
+    Value: !Sub '${ProjectName}-msk'
+
+    Export:
+      Name: !Sub '${ProjectName}-MSKClusterName'
+
+
+  MainKafkaTopicArn:
+    Description: Main sales records Kafka topic ARN
+    Value: !Ref SalesRecordsTopic
+
+  ErrorKafkaTopicArn:
+    Description: Kafka error/DLQ topic ARN
+    Value: !Ref SalesErrorsTopic
+
+  IcebergControlTopicArn:
+    Description: Iceberg control topic ARN
+    Value: !Ref IcebergControlTopic
+
+
+  # ============================================================
+  # Schema Registry
+  # ============================================================
+
+  SalesSchemaRegistryArn:
+    Description: Glue Schema Registry ARN
+    Value: !GetAtt SalesSchemaRegistry.Arn
+
+    Export:
+      Name: !Sub '${ProjectName}-SalesSchemaRegistryArn'
+
+
+  SalesSchemaRegistryName:
+    Description: Glue Schema Registry name
+    Value: !Sub '${ProjectName}-schema-registry'
+
+    Export:
+      Name: !Sub '${ProjectName}-SalesSchemaRegistryName'
+
+
+  SalesRecordSchemaArn:
+    Description: Sales record schema ARN
+    Value: !GetAtt SalesRecordSchema.Arn
+
+    Export:
+      Name: !Sub '${ProjectName}-SalesRecordSchemaArn'
+
+
+  # ============================================================
+  # MSK Connect
+  # ============================================================
+
+  MSKConnectLogGroupName:
+    Description: MSK Connect CloudWatch log group
+    Value: !Ref MSKConnectLogGroup
+
+    Export:
+      Name: !Sub '${ProjectName}-MSKConnectLogGroupName'

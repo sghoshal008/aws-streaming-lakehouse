@@ -1,0 +1,944 @@
+AWSTemplateFormatVersion: '2010-09-09'
+
+Description: >
+  Orchestration layer for the IATA Sales IaC pipeline.
+  Creates the ingestion and Bronze-to-Silver AWS Step Functions
+  state machines and their CloudWatch log groups.
+
+# ============================================================
+# Parameters
+# ============================================================
+
+Parameters:
+
+  ProjectName:
+    Type: String
+    Default: iata-sales-iac
+    Description: Common resource naming prefix.
+
+
+  # ----------------------------------------------------------
+  # Compute resources
+  # ----------------------------------------------------------
+
+  AcquisitionLambdaName:
+    Type: String
+    Default: iata-sales-iac-acquisition
+    Description: Acquisition Lambda function name.
+
+  LandingToMSKGlueJobName:
+    Type: String
+    Default: iata-sales-iac-landing-to-msk
+    Description: Landing-to-MSK Glue job name.
+
+  BronzeToSilverGlueJobName:
+    Type: String
+    Default: iata-sales-iac-bronze-to-silver
+    Description: Bronze-to-Silver Glue job name.
+
+
+  # ----------------------------------------------------------
+  # DynamoDB
+  # ----------------------------------------------------------
+
+  IngestionControlTableName:
+    Type: String
+    Default: iata-sales-iac-ingestion-control
+    Description: DynamoDB ingestion and processing control table.
+
+
+  # ----------------------------------------------------------
+  # SNS
+  # ----------------------------------------------------------
+
+  NotificationTopicArn:
+    Type: String
+    Description: >
+      SNS topic ARN used for pipeline failure and DQ warning
+      notifications.
+
+
+  # ----------------------------------------------------------
+  # IAM
+  # ----------------------------------------------------------
+
+  IngestionStateMachineRoleArn:
+    Type: String
+    Description: >
+      IAM execution role ARN for the ingestion Step Functions
+      state machine.
+
+  BronzeToSilverStateMachineRoleArn:
+    Type: String
+    Description: >
+      IAM execution role ARN for the Bronze-to-Silver
+      Step Functions state machine.
+
+
+# ============================================================
+# Resources
+# ============================================================
+
+Resources:
+
+  # ==========================================================
+  # STEP FUNCTIONS LOG GROUP
+  # Ingestion
+  # ==========================================================
+
+  IngestionStateMachineLogGroup:
+    Type: AWS::Logs::LogGroup
+
+    Properties:
+
+      LogGroupName:
+        !Sub '/aws/vendedlogs/states/${ProjectName}-ingestion-pipeline-Logs'
+
+      RetentionInDays: 7
+
+      Tags:
+
+        - Key: Project
+          Value: !Ref ProjectName
+
+        - Key: Component
+          Value: IngestionOrchestration
+
+        - Key: ManagedBy
+          Value: CloudFormation
+
+
+  # ==========================================================
+  # STEP FUNCTIONS LOG GROUP
+  # Bronze -> Silver
+  # ==========================================================
+
+  BronzeToSilverStateMachineLogGroup:
+    Type: AWS::Logs::LogGroup
+
+    Properties:
+
+      LogGroupName:
+        !Sub '/aws/vendedlogs/states/${ProjectName}-bronze-to-silver-pipeline-Logs'
+
+      RetentionInDays: 7
+
+      Tags:
+
+        - Key: Project
+          Value: !Ref ProjectName
+
+        - Key: Component
+          Value: BronzeToSilverOrchestration
+
+        - Key: ManagedBy
+          Value: CloudFormation
+
+
+  # ==========================================================
+  # INGESTION STATE MACHINE
+  #
+  # Acquisition Lambda
+  #       ↓
+  # Landing -> MSK Glue
+  #       ↓
+  # Mark DynamoDB run completed
+  #       ↓
+  # Success
+  #
+  # This workflow stops after records have successfully been
+  # published to Kafka.
+  #
+  # MSK Connect -> Bronze is asynchronous and therefore is not
+  # represented by an arbitrary fixed Wait state here.
+  # ==========================================================
+
+  IngestionStateMachine:
+    Type: AWS::StepFunctions::StateMachine
+
+    DependsOn:
+      - IngestionStateMachineLogGroup
+
+    Properties:
+
+      StateMachineName:
+        !Sub '${ProjectName}-ingestion-pipeline'
+
+      StateMachineType: STANDARD
+
+      RoleArn:
+        !Ref IngestionStateMachineRoleArn
+
+
+      # -------------------------------------------------------
+      # Logging
+      # -------------------------------------------------------
+
+      LoggingConfiguration:
+
+        Destinations:
+
+          - CloudWatchLogsLogGroup:
+
+              LogGroupArn:
+                !GetAtt IngestionStateMachineLogGroup.Arn
+
+        IncludeExecutionData: true
+
+        Level: ALL
+
+
+      # -------------------------------------------------------
+      # X-Ray
+      # -------------------------------------------------------
+
+      TracingConfiguration:
+
+        Enabled: true
+
+
+      # -------------------------------------------------------
+      # Runtime substitutions
+      # -------------------------------------------------------
+
+      DefinitionSubstitutions:
+
+        AcquisitionLambdaArn:
+          !Sub 'arn:${AWS::Partition}:lambda:${AWS::Region}:${AWS::AccountId}:function:${AcquisitionLambdaName}'
+
+        LandingToMSKGlueJob:
+          !Ref LandingToMSKGlueJobName
+
+        ControlTableName:
+          !Ref IngestionControlTableName
+
+        NotificationTopicArn:
+          !Ref NotificationTopicArn
+
+
+      # -------------------------------------------------------
+      # ASL
+      # -------------------------------------------------------
+
+      DefinitionString: |
+        {
+          "Comment": "IATA Sales acquisition and MSK producer pipeline",
+          "StartAt": "Run Acquisition",
+
+          "States": {
+
+            "Run Acquisition": {
+              "Type": "Task",
+              "Resource": "arn:aws:states:::lambda:invoke",
+
+              "Parameters": {
+                "FunctionName": "${AcquisitionLambdaArn}",
+                "Payload": {}
+              },
+
+              "ResultSelector": {
+                "status.$": "$.Payload.status",
+                "run_id.$": "$.Payload.run_id",
+                "source_file_id.$": "$.Payload.source_file_id",
+                "file_count.$": "$.Payload.file_count",
+                "archive_uri.$": "$.Payload.archive_uri",
+                "manifest_bucket.$": "$.Payload.manifest_bucket",
+                "manifest_key.$": "$.Payload.manifest_key",
+                "manifest_uri.$": "$.Payload.manifest_uri",
+                "files.$": "$.Payload.files"
+              },
+
+              "ResultPath": "$.acquisition",
+
+              "Next": "Run Landing To MSK",
+
+              "Retry": [
+                {
+                  "ErrorEquals": [
+                    "Lambda.ServiceException",
+                    "Lambda.AWSLambdaException",
+                    "Lambda.SdkClientException"
+                  ],
+                  "IntervalSeconds": 5,
+                  "MaxAttempts": 2,
+                  "BackoffRate": 2.0
+                }
+              ],
+
+              "Catch": [
+                {
+                  "ErrorEquals": [
+                    "States.ALL"
+                  ],
+                  "ResultPath": "$.error",
+                  "Next": "Send Acquisition Failure SNS"
+                }
+              ]
+            },
+
+
+            "Run Landing To MSK": {
+              "Type": "Task",
+              "Resource": "arn:aws:states:::glue:startJobRun.sync",
+
+              "Parameters": {
+
+                "JobName": "${LandingToMSKGlueJob}",
+
+                "Arguments": {
+                  "--MANIFEST_URI.$": "$.acquisition.manifest_uri"
+                }
+              },
+
+              "ResultPath": "$.glue",
+
+              "Next": "Mark Run Completed",
+
+              "Retry": [
+                {
+                  "ErrorEquals": [
+                    "Glue.ConcurrentRunsExceededException",
+                    "Glue.InternalServiceException",
+                    "Glue.OperationTimeoutException"
+                  ],
+                  "IntervalSeconds": 30,
+                  "MaxAttempts": 2,
+                  "BackoffRate": 2.0
+                }
+              ],
+
+              "Catch": [
+                {
+                  "ErrorEquals": [
+                    "States.ALL"
+                  ],
+                  "ResultPath": "$.error",
+                  "Next": "Mark Run Failed"
+                }
+              ]
+            },
+
+
+            "Mark Run Completed": {
+              "Type": "Task",
+              "Resource": "arn:aws:states:::dynamodb:updateItem",
+
+              "Parameters": {
+
+                "TableName": "${ControlTableName}",
+
+                "Key": {
+
+                  "pk": {
+                    "S.$": "States.Format('RUN#{}', $.acquisition.run_id)"
+                  },
+
+                  "sk": {
+                    "S": "METADATA"
+                  }
+                },
+
+                "UpdateExpression": "SET #status = :status, #stage = :stage, end_time = :end_time, updated_at = :updated_at",
+
+                "ExpressionAttributeNames": {
+                  "#status": "status",
+                  "#stage": "stage"
+                },
+
+                "ExpressionAttributeValues": {
+
+                  ":status": {
+                    "S": "COMPLETED"
+                  },
+
+                  ":stage": {
+                    "S": "MSK_PUBLISHED"
+                  },
+
+                  ":end_time": {
+                    "S.$": "$$.State.EnteredTime"
+                  },
+
+                  ":updated_at": {
+                    "S.$": "$$.State.EnteredTime"
+                  }
+                }
+              },
+
+              "ResultPath": "$.dynamodb_update",
+
+              "Next": "Ingestion Pipeline Succeeded",
+
+              "Catch": [
+                {
+                  "ErrorEquals": [
+                    "States.ALL"
+                  ],
+                  "ResultPath": "$.error",
+                  "Next": "Send Control Update Failure SNS"
+                }
+              ]
+            },
+
+
+            "Mark Run Failed": {
+              "Type": "Task",
+              "Resource": "arn:aws:states:::dynamodb:updateItem",
+
+              "Parameters": {
+
+                "TableName": "${ControlTableName}",
+
+                "Key": {
+
+                  "pk": {
+                    "S.$": "States.Format('RUN#{}', $.acquisition.run_id)"
+                  },
+
+                  "sk": {
+                    "S": "METADATA"
+                  }
+                },
+
+                "UpdateExpression": "SET #status = :status, #stage = :stage, error_message = :error_message, end_time = :end_time, updated_at = :updated_at",
+
+                "ExpressionAttributeNames": {
+                  "#status": "status",
+                  "#stage": "stage"
+                },
+
+                "ExpressionAttributeValues": {
+
+                  ":status": {
+                    "S": "FAILED"
+                  },
+
+                  ":stage": {
+                    "S": "GLUE_PRODUCER_FAILED"
+                  },
+
+                  ":error_message": {
+                    "S.$": "$.error.Cause"
+                  },
+
+                  ":end_time": {
+                    "S.$": "$$.State.EnteredTime"
+                  },
+
+                  ":updated_at": {
+                    "S.$": "$$.State.EnteredTime"
+                  }
+                }
+              },
+
+              "ResultPath": "$.dynamodb_failure_update",
+
+              "Next": "Send Glue Failure SNS",
+
+              "Catch": [
+                {
+                  "ErrorEquals": [
+                    "States.ALL"
+                  ],
+                  "ResultPath": "$.dynamodb_error",
+                  "Next": "Send Glue Failure SNS"
+                }
+              ]
+            },
+
+
+            "Send Acquisition Failure SNS": {
+              "Type": "Task",
+              "Resource": "arn:aws:states:::sns:publish",
+
+              "Parameters": {
+
+                "TopicArn": "${NotificationTopicArn}",
+
+                "Subject": "IATA Sales - Acquisition FAILED",
+
+                "Message.$": "States.Format('IATA Sales ingestion pipeline failed at Acquisition Lambda. Execution: {}. Error: {}', $$.Execution.Name, $.error.Cause)"
+              },
+
+              "Next": "Ingestion Pipeline Failed",
+
+              "Catch": [
+                {
+                  "ErrorEquals": [
+                    "States.ALL"
+                  ],
+                  "ResultPath": "$.sns_error",
+                  "Next": "Ingestion Pipeline Failed"
+                }
+              ]
+            },
+
+
+            "Send Glue Failure SNS": {
+              "Type": "Task",
+              "Resource": "arn:aws:states:::sns:publish",
+
+              "Parameters": {
+
+                "TopicArn": "${NotificationTopicArn}",
+
+                "Subject": "IATA Sales - Landing to MSK FAILED",
+
+                "Message.$": "States.Format('IATA Sales ingestion pipeline failed. Run ID: {}. Stage: Landing to MSK Glue Producer. Error: {}', $.acquisition.run_id, $.error.Cause)"
+              },
+
+              "Next": "Ingestion Pipeline Failed",
+
+              "Catch": [
+                {
+                  "ErrorEquals": [
+                    "States.ALL"
+                  ],
+                  "ResultPath": "$.sns_error",
+                  "Next": "Ingestion Pipeline Failed"
+                }
+              ]
+            },
+
+
+            "Send Control Update Failure SNS": {
+              "Type": "Task",
+              "Resource": "arn:aws:states:::sns:publish",
+
+              "Parameters": {
+
+                "TopicArn": "${NotificationTopicArn}",
+
+                "Subject": "IATA Sales - Control Table Update FAILED",
+
+                "Message.$": "States.Format('IATA Sales data was published to MSK, but the ingestion control table update failed. Run ID: {}. Error: {}', $.acquisition.run_id, $.error.Cause)"
+              },
+
+              "Next": "Ingestion Pipeline Failed",
+
+              "Catch": [
+                {
+                  "ErrorEquals": [
+                    "States.ALL"
+                  ],
+                  "ResultPath": "$.sns_error",
+                  "Next": "Ingestion Pipeline Failed"
+                }
+              ]
+            },
+
+
+            "Ingestion Pipeline Succeeded": {
+              "Type": "Succeed"
+            },
+
+
+            "Ingestion Pipeline Failed": {
+              "Type": "Fail",
+              "Error": "IATASalesIngestionFailed",
+              "Cause": "IATA Sales ingestion pipeline failed"
+            }
+          }
+        }
+
+
+      Tags:
+
+        - Key: Project
+          Value: !Ref ProjectName
+
+        - Key: Component
+          Value: IngestionOrchestration
+
+        - Key: ManagedBy
+          Value: CloudFormation
+
+
+  # ==========================================================
+  # BRONZE -> SILVER STATE MACHINE
+  #
+  # Generate Silver Run ID
+  #       ↓
+  # Bronze -> Silver Glue
+  #       ↓
+  # DynamoDB reconciliation summary
+  #       ↓
+  # quarantine_records?
+  #       ├─ 0       -> Success
+  #       └─ >0      -> SNS DQ warning -> Success
+  #
+  # IMPORTANT:
+  # Business DQ failures DO NOT fail the pipeline.
+  # Technical Glue failures DO fail the pipeline.
+  # ==========================================================
+
+  BronzeToSilverStateMachine:
+    Type: AWS::StepFunctions::StateMachine
+
+    DependsOn:
+      - BronzeToSilverStateMachineLogGroup
+
+    Properties:
+
+      StateMachineName:
+        !Sub '${ProjectName}-bronze-to-silver-pipeline'
+
+      StateMachineType: STANDARD
+
+      RoleArn:
+        !Ref BronzeToSilverStateMachineRoleArn
+
+
+      LoggingConfiguration:
+
+        Destinations:
+
+          - CloudWatchLogsLogGroup:
+
+              LogGroupArn:
+                !GetAtt BronzeToSilverStateMachineLogGroup.Arn
+
+        IncludeExecutionData: true
+
+        Level: ALL
+
+
+      TracingConfiguration:
+
+        Enabled: true
+
+
+      DefinitionSubstitutions:
+
+        BronzeToSilverGlueJob:
+          !Ref BronzeToSilverGlueJobName
+
+        ControlTableName:
+          !Ref IngestionControlTableName
+
+        NotificationTopicArn:
+          !Ref NotificationTopicArn
+
+
+      DefinitionString: |
+        {
+          "Comment": "IATA Sales Bronze to Silver processing pipeline",
+          "StartAt": "Create Silver Run ID",
+
+          "States": {
+
+            "Create Silver Run ID": {
+              "Type": "Pass",
+
+              "Parameters": {
+                "silver_run_id.$": "States.UUID()"
+              },
+
+              "ResultPath": "$.run",
+
+              "Next": "Run Bronze To Silver Glue"
+            },
+
+
+            "Run Bronze To Silver Glue": {
+              "Type": "Task",
+              "Resource": "arn:aws:states:::glue:startJobRun.sync",
+
+              "Parameters": {
+
+                "JobName": "${BronzeToSilverGlueJob}",
+
+                "Arguments": {
+                  "--SILVER_RUN_ID.$": "$.run.silver_run_id"
+                }
+              },
+
+              "ResultPath": "$.glue",
+
+              "Next": "Get Processing Summary",
+
+              "Retry": [
+                {
+                  "ErrorEquals": [
+                    "Glue.ConcurrentRunsExceededException",
+                    "Glue.InternalServiceException",
+                    "Glue.OperationTimeoutException"
+                  ],
+                  "IntervalSeconds": 30,
+                  "MaxAttempts": 2,
+                  "BackoffRate": 2.0
+                }
+              ],
+
+              "Catch": [
+                {
+                  "ErrorEquals": [
+                    "States.ALL"
+                  ],
+                  "ResultPath": "$.error",
+                  "Next": "Send Silver Failure SNS"
+                }
+              ]
+            },
+
+
+            "Get Processing Summary": {
+              "Type": "Task",
+              "Resource": "arn:aws:states:::dynamodb:getItem",
+
+              "Parameters": {
+
+                "TableName": "${ControlTableName}",
+
+                "Key": {
+
+                  "pk": {
+                    "S.$": "States.Format('SILVER_RUN#{}', $.run.silver_run_id)"
+                  },
+
+                  "sk": {
+                    "S": "SUMMARY"
+                  }
+                }
+              },
+
+              "ResultPath": "$.summary",
+
+              "Next": "Check Processing Summary",
+
+              "Catch": [
+                {
+                  "ErrorEquals": [
+                    "States.ALL"
+                  ],
+                  "ResultPath": "$.error",
+                  "Next": "Send Summary Failure SNS"
+                }
+              ]
+            },
+
+
+            "Check Processing Summary": {
+              "Type": "Choice",
+
+              "Choices": [
+
+                {
+                  "And": [
+
+                    {
+                      "Variable": "$.summary.Item.quarantine_records.N",
+                      "IsPresent": true
+                    },
+
+                    {
+                      "Variable": "$.summary.Item.quarantine_records.N",
+                      "StringEquals": "0"
+                    }
+                  ],
+
+                  "Next": "Bronze To Silver Pipeline Succeeded"
+                },
+
+                {
+                  "Variable": "$.summary.Item.quarantine_records.N",
+                  "IsPresent": true,
+                  "Next": "Send DQ Warning SNS"
+                }
+              ],
+
+              "Default": "Send Summary Failure SNS"
+            },
+
+
+            "Send DQ Warning SNS": {
+              "Type": "Task",
+              "Resource": "arn:aws:states:::sns:publish",
+
+              "Parameters": {
+
+                "TopicArn": "${NotificationTopicArn}",
+
+                "Subject": "IATA Sales - Silver DQ Warning",
+
+                "Message.$": "States.Format('Silver processing completed with quarantined records. Silver Run ID: {}. Bronze read: {}. Valid: {}. Quarantined: {}. Duplicates removed: {}. Silver processed: {}.', $.run.silver_run_id, $.summary.Item.bronze_records_read.N, $.summary.Item.valid_records.N, $.summary.Item.quarantine_records.N, $.summary.Item.duplicates_removed.N, $.summary.Item.silver_records_processed.N)"
+              },
+
+              "Next": "Bronze To Silver Pipeline Succeeded",
+
+              "Catch": [
+                {
+                  "ErrorEquals": [
+                    "States.ALL"
+                  ],
+                  "ResultPath": "$.dq_notification_error",
+                  "Next": "Bronze To Silver Pipeline Succeeded"
+                }
+              ]
+            },
+
+
+            "Send Silver Failure SNS": {
+              "Type": "Task",
+              "Resource": "arn:aws:states:::sns:publish",
+
+              "Parameters": {
+
+                "TopicArn": "${NotificationTopicArn}",
+
+                "Subject": "IATA Sales - Bronze to Silver FAILED",
+
+                "Message.$": "States.Format('Bronze to Silver pipeline failed. Silver Run ID: {}. Error: {}', $.run.silver_run_id, $.error.Cause)"
+              },
+
+              "Next": "Bronze To Silver Pipeline Failed",
+
+              "Catch": [
+                {
+                  "ErrorEquals": [
+                    "States.ALL"
+                  ],
+                  "ResultPath": "$.sns_error",
+                  "Next": "Bronze To Silver Pipeline Failed"
+                }
+              ]
+            },
+
+
+            "Send Summary Failure SNS": {
+              "Type": "Task",
+              "Resource": "arn:aws:states:::sns:publish",
+
+              "Parameters": {
+
+                "TopicArn": "${NotificationTopicArn}",
+
+                "Subject": "IATA Sales - Silver Reconciliation FAILED",
+
+                "Message.$": "States.Format('Bronze to Silver Glue processing completed, but the reconciliation summary could not be retrieved or was incomplete. Silver Run ID: {}.', $.run.silver_run_id)"
+              },
+
+              "Next": "Bronze To Silver Pipeline Failed",
+
+              "Catch": [
+                {
+                  "ErrorEquals": [
+                    "States.ALL"
+                  ],
+                  "ResultPath": "$.sns_error",
+                  "Next": "Bronze To Silver Pipeline Failed"
+                }
+              ]
+            },
+
+
+            "Bronze To Silver Pipeline Succeeded": {
+              "Type": "Succeed"
+            },
+
+
+            "Bronze To Silver Pipeline Failed": {
+              "Type": "Fail",
+              "Error": "BronzeToSilverFailed",
+              "Cause": "IATA Sales Bronze to Silver technical processing failed"
+            }
+          }
+        }
+
+
+      Tags:
+
+        - Key: Project
+          Value: !Ref ProjectName
+
+        - Key: Component
+          Value: BronzeToSilverOrchestration
+
+        - Key: ManagedBy
+          Value: CloudFormation
+
+
+# ============================================================
+# Outputs
+# ============================================================
+
+Outputs:
+
+  # ----------------------------------------------------------
+  # Ingestion State Machine
+  # ----------------------------------------------------------
+
+  IngestionStateMachineArn:
+
+    Description: IATA Sales ingestion state machine ARN
+
+    Value:
+      !Ref IngestionStateMachine
+
+    Export:
+
+      Name:
+        !Sub '${ProjectName}-IngestionStateMachineArn'
+
+
+  IngestionStateMachineName:
+
+    Description: IATA Sales ingestion state machine name
+
+    Value:
+      !GetAtt IngestionStateMachine.Name
+
+    Export:
+
+      Name:
+        !Sub '${ProjectName}-IngestionStateMachineName'
+
+
+  # ----------------------------------------------------------
+  # Bronze -> Silver State Machine
+  # ----------------------------------------------------------
+
+  BronzeToSilverStateMachineArn:
+
+    Description: IATA Sales Bronze-to-Silver state machine ARN
+
+    Value:
+      !Ref BronzeToSilverStateMachine
+
+    Export:
+
+      Name:
+        !Sub '${ProjectName}-BronzeToSilverStateMachineArn'
+
+
+  BronzeToSilverStateMachineName:
+
+    Description: IATA Sales Bronze-to-Silver state machine name
+
+    Value:
+      !GetAtt BronzeToSilverStateMachine.Name
+
+    Export:
+
+      Name:
+        !Sub '${ProjectName}-BronzeToSilverStateMachineName'
+
+
+  # ----------------------------------------------------------
+  # Log Groups
+  # ----------------------------------------------------------
+
+  IngestionStateMachineLogGroupName:
+
+    Description: Ingestion Step Functions CloudWatch log group
+
+    Value:
+      !Ref IngestionStateMachineLogGroup
+
+
+  BronzeToSilverStateMachineLogGroupName:
+
+    Description: Bronze-to-Silver Step Functions CloudWatch log group
+
+    Value:
+      !Ref BronzeToSilverStateMachineLogGroup

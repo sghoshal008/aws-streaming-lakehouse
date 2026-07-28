@@ -1,0 +1,1065 @@
+AWSTemplateFormatVersion: '2010-09-09'
+
+Description: >
+  IAM roles and execution policies for the
+  IATA Sales IaC data pipeline.
+
+Parameters:
+
+  ProjectName:
+    Type: String
+    Default: iata-sales-iac
+    Description: Common resource naming prefix.
+
+  LandingBucketName:
+    Type: String
+    Default: iata-sales-iac-landing-878670310452
+
+  LakehouseBucketName:
+    Type: String
+    Default: iata-sales-iac-lakehouse-878670310452
+
+  ArtifactsBucketName:
+    Type: String
+    Default: iata-sales-iac-artifacts-878670310452
+
+  # Retained because main.yaml currently passes this parameter.
+  # It is not directly required by the execution roles below.
+  PluginsBucketName:
+    Type: String
+    Default: iata-sales-iac-plugins-878670310452
+
+  IngestionControlTableName:
+    Type: String
+    Default: iata-sales-iac-ingestion-control
+
+
+Resources:
+
+  # ============================================================
+  # Acquisition Lambda Role
+  # ============================================================
+
+  AcquisitionLambdaRole:
+    Type: AWS::IAM::Role
+
+    Properties:
+
+      RoleName: !Sub '${ProjectName}-acquisition-lambda-role'
+
+      AssumeRolePolicyDocument:
+
+        Version: '2012-10-17'
+
+        Statement:
+
+          - Effect: Allow
+
+            Principal:
+              Service:
+                - lambda.amazonaws.com
+
+            Action:
+              - sts:AssumeRole
+
+
+      ManagedPolicyArns:
+
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+
+
+      Policies:
+
+        - PolicyName: !Sub '${ProjectName}-acquisition-permissions'
+
+          PolicyDocument:
+
+            Version: '2012-10-17'
+
+            Statement:
+
+              # ------------------------------------------------
+              # Landing / Archive / Manifest writes
+              # ------------------------------------------------
+
+              - Sid: WriteAcquisitionFiles
+
+                Effect: Allow
+
+                Action:
+                  - s3:PutObject
+                  - s3:AbortMultipartUpload
+
+                Resource:
+                  - !Sub 'arn:${AWS::Partition}:s3:::${LandingBucketName}/archive/*'
+                  - !Sub 'arn:${AWS::Partition}:s3:::${LandingBucketName}/landing/*'
+                  - !Sub 'arn:${AWS::Partition}:s3:::${LandingBucketName}/manifests/*'
+
+
+              # ------------------------------------------------
+              # Landing / Manifest reads
+              # ------------------------------------------------
+
+              - Sid: ReadAcquisitionFiles
+
+                Effect: Allow
+
+                Action:
+                  - s3:GetObject
+
+                Resource:
+                  - !Sub 'arn:${AWS::Partition}:s3:::${LandingBucketName}/archive/*'
+                  - !Sub 'arn:${AWS::Partition}:s3:::${LandingBucketName}/landing/*'
+                  - !Sub 'arn:${AWS::Partition}:s3:::${LandingBucketName}/manifests/*'
+
+
+              # ------------------------------------------------
+              # Pipeline control table
+              # ------------------------------------------------
+
+              - Sid: AccessIngestionControlTable
+
+                Effect: Allow
+
+                Action:
+                  - dynamodb:PutItem
+                  - dynamodb:GetItem
+                  - dynamodb:UpdateItem
+                  - dynamodb:Query
+
+                Resource:
+                  - !Sub 'arn:${AWS::Partition}:dynamodb:${AWS::Region}:${AWS::AccountId}:table/${IngestionControlTableName}'
+
+
+      Tags:
+
+        - Key: Project
+          Value: !Ref ProjectName
+
+        - Key: ManagedBy
+          Value: CloudFormation
+
+
+  # ============================================================
+  # Glue Landing -> MSK Role
+  # ============================================================
+
+  GlueLandingToMSKRole:
+    Type: AWS::IAM::Role
+
+    Properties:
+
+      RoleName: !Sub '${ProjectName}-glue-landing-to-msk-role'
+
+
+      AssumeRolePolicyDocument:
+
+        Version: '2012-10-17'
+
+        Statement:
+
+          - Effect: Allow
+
+            Principal:
+              Service:
+                - glue.amazonaws.com
+
+            Action:
+              - sts:AssumeRole
+
+
+      ManagedPolicyArns:
+
+        - arn:aws:iam::aws:policy/service-role/AWSGlueServiceRole
+
+
+      Policies:
+
+        - PolicyName: !Sub '${ProjectName}-glue-landing-to-msk-permissions'
+
+          PolicyDocument:
+
+            Version: '2012-10-17'
+
+            Statement:
+
+              # ------------------------------------------------
+              # Landing bucket
+              # ------------------------------------------------
+
+              - Sid: ReadLandingBucket
+
+                Effect: Allow
+
+                Action:
+                  - s3:ListBucket
+                  - s3:GetBucketLocation
+
+                Resource:
+                  - !Sub 'arn:${AWS::Partition}:s3:::${LandingBucketName}'
+
+
+              - Sid: ReadLandingObjects
+
+                Effect: Allow
+
+                Action:
+                  - s3:GetObject
+
+                Resource:
+                  - !Sub 'arn:${AWS::Partition}:s3:::${LandingBucketName}/*'
+
+
+              # ------------------------------------------------
+              # Glue scripts / JARs
+              # ------------------------------------------------
+
+              - Sid: ReadGlueArtifacts
+
+                Effect: Allow
+
+                Action:
+                  - s3:GetObject
+
+                Resource:
+                  - !Sub 'arn:${AWS::Partition}:s3:::${ArtifactsBucketName}/glue/*'
+                  - !Sub 'arn:${AWS::Partition}:s3:::${ArtifactsBucketName}/artifacts/*'
+
+
+              # ------------------------------------------------
+              # MSK cluster
+              # ------------------------------------------------
+
+              - Sid: ConnectToMSK
+
+                Effect: Allow
+
+                Action:
+                  - kafka-cluster:Connect
+                  - kafka-cluster:DescribeCluster
+                  - kafka-cluster:WriteDataIdempotently
+
+                Resource:
+                  - !Sub 'arn:${AWS::Partition}:kafka:${AWS::Region}:${AWS::AccountId}:cluster/${ProjectName}-msk/*'
+
+              # ------------------------------------------------
+              # Produce to application/error topics
+              # ------------------------------------------------
+
+              - Sid: ProduceToKafkaTopics
+
+                Effect: Allow
+
+                Action:
+                  - kafka-cluster:DescribeTopic
+                  - kafka-cluster:WriteData
+
+                Resource:
+
+                  - !Sub 'arn:${AWS::Partition}:kafka:${AWS::Region}:${AWS::AccountId}:topic/${ProjectName}-msk/*/${ProjectName}-records'
+
+                  - !Sub 'arn:${AWS::Partition}:kafka:${AWS::Region}:${AWS::AccountId}:topic/${ProjectName}-msk/*/${ProjectName}-errors'
+
+
+              # ------------------------------------------------
+              # Spark UI / temp files
+              # ------------------------------------------------
+
+              - Sid: WriteGlueOperationalArtifacts
+
+                Effect: Allow
+
+                Action:
+                  - s3:GetObject
+                  - s3:PutObject
+                  - s3:DeleteObject
+                  - s3:AbortMultipartUpload
+
+                Resource:
+                  - !Sub 'arn:${AWS::Partition}:s3:::${ArtifactsBucketName}/glue/spark-ui/*'
+                  - !Sub 'arn:${AWS::Partition}:s3:::${ArtifactsBucketName}/glue/temporary/*'
+
+
+              - Sid: ListArtifactsBucket
+
+                Effect: Allow
+
+                Action:
+                  - s3:ListBucket
+                  - s3:GetBucketLocation
+
+                Resource:
+                  - !Sub 'arn:${AWS::Partition}:s3:::${ArtifactsBucketName}'
+
+
+      Tags:
+
+        - Key: Project
+          Value: !Ref ProjectName
+
+        - Key: ManagedBy
+          Value: CloudFormation
+
+
+  # ============================================================
+  # Glue Bronze -> Silver Role
+  # ============================================================
+
+  GlueBronzeToSilverRole:
+    Type: AWS::IAM::Role
+
+    Properties:
+
+      RoleName: !Sub '${ProjectName}-glue-bronze-to-silver-role'
+
+
+      AssumeRolePolicyDocument:
+
+        Version: '2012-10-17'
+
+        Statement:
+
+          - Effect: Allow
+
+            Principal:
+              Service:
+                - glue.amazonaws.com
+
+            Action:
+              - sts:AssumeRole
+
+
+      ManagedPolicyArns:
+
+        - arn:aws:iam::aws:policy/service-role/AWSGlueServiceRole
+
+
+      Policies:
+
+        - PolicyName: !Sub '${ProjectName}-glue-bronze-to-silver-permissions'
+
+          PolicyDocument:
+
+            Version: '2012-10-17'
+
+            Statement:
+
+              # ------------------------------------------------
+              # Glue Data Catalog
+              # ------------------------------------------------
+
+              - Sid: GlueCatalogAccess
+
+                Effect: Allow
+
+                Action:
+                  - glue:GetDatabase
+                  - glue:GetDatabases
+                  - glue:GetTable
+                  - glue:GetTables
+                  - glue:CreateTable
+                  - glue:UpdateTable
+                  - glue:GetPartition
+                  - glue:GetPartitions
+                  - glue:CreatePartition
+                  - glue:UpdatePartition
+                  - glue:BatchCreatePartition
+
+                Resource: '*'
+
+
+              # ------------------------------------------------
+              # Lakehouse bucket
+              # ------------------------------------------------
+
+              - Sid: LakehouseBucketAccess
+
+                Effect: Allow
+
+                Action:
+                  - s3:ListBucket
+                  - s3:GetBucketLocation
+
+                Resource:
+                  - !Sub 'arn:${AWS::Partition}:s3:::${LakehouseBucketName}'
+
+
+              - Sid: LakehouseObjectAccess
+
+                Effect: Allow
+
+                Action:
+                  - s3:GetObject
+                  - s3:PutObject
+                  - s3:DeleteObject
+                  - s3:AbortMultipartUpload
+                  - s3:ListMultipartUploadParts
+
+                Resource:
+                  - !Sub 'arn:${AWS::Partition}:s3:::${LakehouseBucketName}/bronze/*'
+                  - !Sub 'arn:${AWS::Partition}:s3:::${LakehouseBucketName}/silver/*'
+                  - !Sub 'arn:${AWS::Partition}:s3:::${LakehouseBucketName}/quarantine/*'
+
+
+              # ------------------------------------------------
+              # Glue script
+              # ------------------------------------------------
+
+              - Sid: ReadGlueScript
+
+                Effect: Allow
+
+                Action:
+                  - s3:GetObject
+
+                Resource:
+                  - !Sub 'arn:${AWS::Partition}:s3:::${ArtifactsBucketName}/glue/*'
+
+
+              # ------------------------------------------------
+              # Pipeline control table
+              # ------------------------------------------------
+
+              - Sid: PipelineControlDynamoDB
+
+                Effect: Allow
+
+                Action:
+                  - dynamodb:GetItem
+                  - dynamodb:PutItem
+                  - dynamodb:UpdateItem
+
+                Resource:
+                  - !Sub 'arn:${AWS::Partition}:dynamodb:${AWS::Region}:${AWS::AccountId}:table/${IngestionControlTableName}'
+
+
+              # ------------------------------------------------
+              # Spark UI / temporary files
+              # ------------------------------------------------
+
+              - Sid: WriteGlueOperationalArtifacts
+
+                Effect: Allow
+
+                Action:
+                  - s3:GetObject
+                  - s3:PutObject
+                  - s3:DeleteObject
+                  - s3:AbortMultipartUpload
+
+                Resource:
+                  - !Sub 'arn:${AWS::Partition}:s3:::${ArtifactsBucketName}/glue/spark-ui/*'
+                  - !Sub 'arn:${AWS::Partition}:s3:::${ArtifactsBucketName}/glue/temporary/*'
+
+
+              - Sid: ListArtifactsBucket
+
+                Effect: Allow
+
+                Action:
+                  - s3:ListBucket
+                  - s3:GetBucketLocation
+
+                Resource:
+                  - !Sub 'arn:${AWS::Partition}:s3:::${ArtifactsBucketName}'
+
+
+      Tags:
+
+        - Key: Project
+          Value: !Ref ProjectName
+
+        - Key: ManagedBy
+          Value: CloudFormation
+
+
+  # ============================================================
+  # Step Functions - Ingestion Pipeline Role
+  # ============================================================
+
+  StepFunctionsIngestionRole:
+    Type: AWS::IAM::Role
+
+    Properties:
+
+      RoleName: !Sub '${ProjectName}-stepfunctions-ingestion-role'
+
+
+      AssumeRolePolicyDocument:
+
+        Version: '2012-10-17'
+
+        Statement:
+
+          - Effect: Allow
+
+            Principal:
+              Service:
+                - states.amazonaws.com
+
+            Action:
+              - sts:AssumeRole
+
+
+      Policies:
+
+        - PolicyName: !Sub '${ProjectName}-stepfunctions-ingestion-permissions'
+
+          PolicyDocument:
+
+            Version: '2012-10-17'
+
+            Statement:
+
+              # ------------------------------------------------
+              # Lambda
+              # ------------------------------------------------
+
+              - Sid: InvokeAcquisitionLambda
+
+                Effect: Allow
+
+                Action:
+                  - lambda:InvokeFunction
+
+                Resource:
+                  - !Sub 'arn:${AWS::Partition}:lambda:${AWS::Region}:${AWS::AccountId}:function:${ProjectName}-acquisition'
+
+                  - !Sub 'arn:${AWS::Partition}:lambda:${AWS::Region}:${AWS::AccountId}:function:${ProjectName}-acquisition:*'
+
+
+              # ------------------------------------------------
+              # Glue
+              # ------------------------------------------------
+
+              - Sid: ManageLandingToMSKGlueJob
+
+                Effect: Allow
+
+                Action:
+                  - glue:StartJobRun
+                  - glue:GetJobRun
+                  - glue:GetJobRuns
+                  - glue:BatchStopJobRun
+
+                Resource: '*'
+
+
+              # ------------------------------------------------
+              # DynamoDB
+              # ------------------------------------------------
+
+              - Sid: UpdateIngestionControl
+
+                Effect: Allow
+
+                Action:
+                  - dynamodb:GetItem
+                  - dynamodb:PutItem
+                  - dynamodb:UpdateItem
+
+                Resource:
+                  - !Sub 'arn:${AWS::Partition}:dynamodb:${AWS::Region}:${AWS::AccountId}:table/${IngestionControlTableName}'
+
+
+              # ------------------------------------------------
+              # SNS
+              # ------------------------------------------------
+
+              - Sid: PublishPipelineAlerts
+
+                Effect: Allow
+
+                Action:
+                  - sns:Publish
+
+                Resource:
+                  - !Sub 'arn:${AWS::Partition}:sns:${AWS::Region}:${AWS::AccountId}:${ProjectName}-pipeline-alerts'
+
+
+              # ------------------------------------------------
+              # Step Functions logging
+              # ------------------------------------------------
+
+              - Sid: StepFunctionsLogging
+
+                Effect: Allow
+
+                Action:
+                  - logs:CreateLogDelivery
+                  - logs:GetLogDelivery
+                  - logs:UpdateLogDelivery
+                  - logs:DeleteLogDelivery
+                  - logs:ListLogDeliveries
+                  - logs:PutResourcePolicy
+                  - logs:DescribeResourcePolicies
+                  - logs:DescribeLogGroups
+
+                Resource: '*'
+
+
+              # ------------------------------------------------
+              # X-Ray
+              # ------------------------------------------------
+
+              - Sid: XRayTracing
+
+                Effect: Allow
+
+                Action:
+                  - xray:PutTraceSegments
+                  - xray:PutTelemetryRecords
+                  - xray:GetSamplingRules
+                  - xray:GetSamplingTargets
+
+                Resource: '*'
+
+
+      Tags:
+
+        - Key: Project
+          Value: !Ref ProjectName
+
+        - Key: ManagedBy
+          Value: CloudFormation
+
+
+  # ============================================================
+  # Step Functions - Bronze -> Silver Role
+  # ============================================================
+
+  StepFunctionsBronzeToSilverRole:
+    Type: AWS::IAM::Role
+
+    Properties:
+
+      RoleName: !Sub '${ProjectName}-stepfunctions-bronze-to-silver-role'
+
+
+      AssumeRolePolicyDocument:
+
+        Version: '2012-10-17'
+
+        Statement:
+
+          - Effect: Allow
+
+            Principal:
+              Service:
+                - states.amazonaws.com
+
+            Action:
+              - sts:AssumeRole
+
+
+      Policies:
+
+        - PolicyName: !Sub '${ProjectName}-stepfunctions-bronze-to-silver-permissions'
+
+          PolicyDocument:
+
+            Version: '2012-10-17'
+
+            Statement:
+
+              # ------------------------------------------------
+              # DynamoDB reconciliation summary
+              # ------------------------------------------------
+
+              - Sid: ReadSilverProcessingSummary
+
+                Effect: Allow
+
+                Action:
+                  - dynamodb:GetItem
+
+                Resource:
+                  - !Sub 'arn:${AWS::Partition}:dynamodb:${AWS::Region}:${AWS::AccountId}:table/${IngestionControlTableName}'
+
+
+              # ------------------------------------------------
+              # Glue
+              # ------------------------------------------------
+
+              - Sid: ManageBronzeToSilverGlueJob
+
+                Effect: Allow
+
+                Action:
+                  - glue:StartJobRun
+                  - glue:GetJobRun
+                  - glue:GetJobRuns
+                  - glue:BatchStopJobRun
+
+                Resource: '*'
+
+
+              # ------------------------------------------------
+              # SNS
+              # ------------------------------------------------
+
+              - Sid: PublishPipelineAlerts
+
+                Effect: Allow
+
+                Action:
+                  - sns:Publish
+
+                Resource:
+                  - !Sub 'arn:${AWS::Partition}:sns:${AWS::Region}:${AWS::AccountId}:${ProjectName}-pipeline-alerts'
+
+
+              # ------------------------------------------------
+              # Step Functions logging
+              # ------------------------------------------------
+
+              - Sid: StepFunctionsLogging
+
+                Effect: Allow
+
+                Action:
+                  - logs:CreateLogDelivery
+                  - logs:GetLogDelivery
+                  - logs:UpdateLogDelivery
+                  - logs:DeleteLogDelivery
+                  - logs:ListLogDeliveries
+                  - logs:PutResourcePolicy
+                  - logs:DescribeResourcePolicies
+                  - logs:DescribeLogGroups
+
+                Resource: '*'
+
+
+              # ------------------------------------------------
+              # X-Ray
+              # ------------------------------------------------
+
+              - Sid: XRayTracing
+
+                Effect: Allow
+
+                Action:
+                  - xray:PutTraceSegments
+                  - xray:PutTelemetryRecords
+                  - xray:GetSamplingRules
+                  - xray:GetSamplingTargets
+
+                Resource: '*'
+
+
+      Tags:
+
+        - Key: Project
+          Value: !Ref ProjectName
+
+        - Key: ManagedBy
+          Value: CloudFormation
+
+
+  # ============================================================
+  # MSK Connect - Iceberg Sink Role
+  #
+  # This role deliberately allows all topics/groups inside the
+  # project MSK cluster. This avoids blocking MSK Connect worker
+  # internal/admin activity while still preventing access to
+  # other MSK clusters.
+  # ============================================================
+
+  IcebergSinkConnectRole:
+    Type: AWS::IAM::Role
+
+    Properties:
+
+      RoleName: !Sub '${ProjectName}-iceberg-sink-connect-role'
+
+
+      # --------------------------------------------------------
+      # MSK Connect trust relationship
+      # --------------------------------------------------------
+
+      AssumeRolePolicyDocument:
+
+        Version: '2012-10-17'
+
+        Statement:
+
+          - Effect: Allow
+
+            Principal:
+              Service:
+                - kafkaconnect.amazonaws.com
+
+            Action:
+              - sts:AssumeRole
+
+            Condition:
+
+              StringEquals:
+
+                aws:SourceAccount:
+                  !Ref AWS::AccountId
+
+
+      Policies:
+
+        - PolicyName: !Sub '${ProjectName}-iceberg-sink-connect-permissions'
+
+          PolicyDocument:
+
+            Version: '2012-10-17'
+
+            Statement:
+
+              # ==================================================
+              # MSK CLUSTER
+              # ==================================================
+
+              - Sid: MSKClusterAccess
+
+                Effect: Allow
+
+                Action:
+                  - kafka-cluster:Connect
+                  - kafka-cluster:DescribeCluster
+
+                Resource:
+                  - !Sub 'arn:${AWS::Partition}:kafka:${AWS::Region}:${AWS::AccountId}:cluster/${ProjectName}-msk/*'
+
+
+              # ==================================================
+              # ALL TOPICS INSIDE THIS PROJECT MSK CLUSTER
+              #
+              # Required for:
+              # - iata-sales-iac-records
+              # - iata-sales-iac-errors
+              # - iata-sales-iac-control-iceberg
+              # - __amazon_msk_connect_* internal topics
+              #
+              # CreateTopic is included because MSK Connect
+              # manages its own internal Kafka topics.
+              # ==================================================
+
+              - Sid: MSKTopicAccess
+
+                Effect: Allow
+
+                Action:
+                  - kafka-cluster:CreateTopic
+                  - kafka-cluster:DescribeTopic
+                  - kafka-cluster:ReadData
+                  - kafka-cluster:WriteData
+
+                Resource:
+                  - !Sub 'arn:${AWS::Partition}:kafka:${AWS::Region}:${AWS::AccountId}:topic/${ProjectName}-msk/*/*'
+
+
+              # ==================================================
+              # ALL CONSUMER GROUPS INSIDE THIS PROJECT CLUSTER
+              #
+              # Required for Kafka Connect worker/internal groups
+              # and the Iceberg sink consumer group.
+              # ==================================================
+
+              - Sid: MSKConsumerGroupAccess
+
+                Effect: Allow
+
+                Action:
+                  - kafka-cluster:AlterGroup
+                  - kafka-cluster:DescribeGroup
+
+                Resource:
+                  - !Sub 'arn:${AWS::Partition}:kafka:${AWS::Region}:${AWS::AccountId}:group/${ProjectName}-msk/*/*'
+
+
+              # ==================================================
+              # LAKEHOUSE BUCKET
+              # ==================================================
+
+              - Sid: LakehouseBucketAccess
+
+                Effect: Allow
+
+                Action:
+                  - s3:GetBucketLocation
+                  - s3:ListBucket
+                  - s3:ListBucketMultipartUploads
+
+                Resource:
+                  - !Sub 'arn:${AWS::Partition}:s3:::${LakehouseBucketName}'
+
+
+              # ==================================================
+              # BRONZE ICEBERG OBJECTS
+              # ==================================================
+
+              - Sid: BronzeLakehouseObjectAccess
+
+                Effect: Allow
+
+                Action:
+                  - s3:GetObject
+                  - s3:PutObject
+                  - s3:DeleteObject
+                  - s3:AbortMultipartUpload
+                  - s3:ListMultipartUploadParts
+
+                Resource:
+                  - !Sub 'arn:${AWS::Partition}:s3:::${LakehouseBucketName}/bronze/*'
+
+
+              # ==================================================
+              # GLUE DATA CATALOG
+              #
+              # Iceberg uses Glue as the catalog.
+              # ==================================================
+
+              - Sid: GlueCatalogAccess
+
+                Effect: Allow
+
+                Action:
+                  - glue:GetDatabase
+                  - glue:GetDatabases
+                  - glue:GetTable
+                  - glue:GetTables
+                  - glue:CreateTable
+                  - glue:UpdateTable
+                  - glue:DeleteTable
+                  - glue:GetPartition
+                  - glue:GetPartitions
+                  - glue:CreatePartition
+                  - glue:BatchCreatePartition
+                  - glue:UpdatePartition
+
+                Resource: '*'
+
+
+              # ==================================================
+              # CLOUDWATCH CONNECTOR LOGGING
+              # ==================================================
+
+              - Sid: ConnectorLogging
+
+                Effect: Allow
+
+                Action:
+                  - logs:CreateLogStream
+                  - logs:PutLogEvents
+                  - logs:DescribeLogStreams
+
+                Resource:
+                  - !Sub 'arn:${AWS::Partition}:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/msk-connect/${ProjectName}-iceberg-sink:*'
+
+              - Sid: KafkaTransactionalIds
+                Effect: Allow
+                Action:
+                  - kafka-cluster:DescribeTransactionalId
+                  - kafka-cluster:AlterTransactionalId
+                Resource:
+                  - !Sub 'arn:${AWS::Partition}:kafka:${AWS::Region}:${AWS::AccountId}:transactional-id/${ProjectName}-msk/*/*'
+
+
+      Tags:
+
+        - Key: Project
+          Value: !Ref ProjectName
+
+        - Key: ManagedBy
+          Value: CloudFormation
+
+
+Outputs:
+
+  # ============================================================
+  # Lambda
+  # ============================================================
+
+  AcquisitionLambdaRoleArn:
+
+    Description: Acquisition Lambda IAM role ARN
+
+    Value:
+      !GetAtt AcquisitionLambdaRole.Arn
+
+    Export:
+
+      Name:
+        !Sub '${ProjectName}-AcquisitionLambdaRoleArn'
+
+
+  # ============================================================
+  # Glue
+  # ============================================================
+
+  GlueLandingToMSKRoleArn:
+
+    Description: Landing to MSK Glue IAM role ARN
+
+    Value:
+      !GetAtt GlueLandingToMSKRole.Arn
+
+    Export:
+
+      Name:
+        !Sub '${ProjectName}-GlueLandingToMSKRoleArn'
+
+
+  GlueBronzeToSilverRoleArn:
+
+    Description: Bronze to Silver Glue IAM role ARN
+
+    Value:
+      !GetAtt GlueBronzeToSilverRole.Arn
+
+    Export:
+
+      Name:
+        !Sub '${ProjectName}-GlueBronzeToSilverRoleArn'
+
+
+  # ============================================================
+  # Step Functions
+  # ============================================================
+
+  StepFunctionsIngestionRoleArn:
+
+    Description: Ingestion Step Functions IAM role ARN
+
+    Value:
+      !GetAtt StepFunctionsIngestionRole.Arn
+
+    Export:
+
+      Name:
+        !Sub '${ProjectName}-StepFunctionsIngestionRoleArn'
+
+
+  StepFunctionsBronzeToSilverRoleArn:
+
+    Description: Bronze to Silver Step Functions IAM role ARN
+
+    Value:
+      !GetAtt StepFunctionsBronzeToSilverRole.Arn
+
+    Export:
+
+      Name:
+        !Sub '${ProjectName}-StepFunctionsBronzeToSilverRoleArn'
+
+
+  # ============================================================
+  # MSK Connect
+  # ============================================================
+
+  IcebergSinkConnectRoleArn:
+
+    Description: Iceberg MSK Connect IAM execution role ARN
+
+    Value:
+      !GetAtt IcebergSinkConnectRole.Arn
+
+    Export:
+
+      Name:
+        !Sub '${ProjectName}-IcebergSinkConnectRoleArn'

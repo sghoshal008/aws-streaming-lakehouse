@@ -1,0 +1,347 @@
+AWSTemplateFormatVersion: '2010-09-09'
+
+Description: >
+  Storage layer for the IATA Sales IaC pipeline.
+  Creates S3 buckets for landing, lakehouse, deployment artifacts and MSK Connect plugins,
+  a DynamoDB ingestion control table, and Glue Data Catalog databases for Bronze,
+  Silver and Quarantine processing.
+
+Parameters:
+
+  ProjectName:
+    Type: String
+    Default: iata-sales-iac
+    Description: Resource naming prefix.
+
+  AccountId:
+    Type: String
+    Default: '878670310452'
+    Description: AWS account ID used in globally unique S3 bucket names.
+
+
+Resources:
+
+  # ============================================================
+  # S3 - Landing Bucket
+  # ============================================================
+
+  LandingBucket:
+    Type: AWS::S3::Bucket
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
+    Properties:
+      BucketName: !Sub '${ProjectName}-landing-${AccountId}'
+
+      VersioningConfiguration:
+        Status: Enabled
+
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: AES256
+
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        IgnorePublicAcls: true
+        BlockPublicPolicy: true
+        RestrictPublicBuckets: true
+
+      Tags:
+        - Key: Name
+          Value: !Sub '${ProjectName}-landing'
+        - Key: Project
+          Value: !Ref ProjectName
+        - Key: Layer
+          Value: Landing
+        - Key: ManagedBy
+          Value: CloudFormation
+
+
+  # ============================================================
+  # S3 - Lakehouse Bucket
+  # ============================================================
+
+  LakehouseBucket:
+    Type: AWS::S3::Bucket
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
+    Properties:
+      BucketName: !Sub '${ProjectName}-lakehouse-${AccountId}'
+
+      VersioningConfiguration:
+        Status: Enabled
+
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: AES256
+
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        IgnorePublicAcls: true
+        BlockPublicPolicy: true
+        RestrictPublicBuckets: true
+
+      Tags:
+        - Key: Name
+          Value: !Sub '${ProjectName}-lakehouse'
+        - Key: Project
+          Value: !Ref ProjectName
+        - Key: Layer
+          Value: Lakehouse
+        - Key: ManagedBy
+          Value: CloudFormation
+
+
+  # ============================================================
+  # S3 - Artifacts Bucket
+  # ============================================================
+
+  ArtifactsBucket:
+    Type: AWS::S3::Bucket
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
+    Properties:
+      BucketName: !Sub '${ProjectName}-artifacts-${AccountId}'
+
+      VersioningConfiguration:
+        Status: Enabled
+
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: AES256
+
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        IgnorePublicAcls: true
+        BlockPublicPolicy: true
+        RestrictPublicBuckets: true
+
+      Tags:
+        - Key: Name
+          Value: !Sub '${ProjectName}-artifacts'
+        - Key: Project
+          Value: !Ref ProjectName
+        - Key: Purpose
+          Value: DeploymentArtifacts
+        - Key: ManagedBy
+          Value: CloudFormation
+
+
+  # ============================================================
+  # S3 - MSK Connect Plugins Bucket
+  # ============================================================
+
+  PluginsBucket:
+    Type: AWS::S3::Bucket
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
+    Properties:
+      BucketName: !Sub '${ProjectName}-plugins-${AccountId}'
+
+      # Current DEV plugin bucket is not versioned.
+      # Keeping the IaC model aligned with the working environment.
+
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: AES256
+
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        IgnorePublicAcls: true
+        BlockPublicPolicy: true
+        RestrictPublicBuckets: true
+
+      Tags:
+        - Key: Name
+          Value: !Sub '${ProjectName}-plugins'
+        - Key: Project
+          Value: !Ref ProjectName
+        - Key: Purpose
+          Value: MSKConnectPlugins
+        - Key: ManagedBy
+          Value: CloudFormation
+
+
+  # ============================================================
+  # DynamoDB - Pipeline Control / Reconciliation
+  # ============================================================
+
+  IngestionControlTable:
+    Type: AWS::DynamoDB::Table
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
+    Properties:
+      TableName: !Sub '${ProjectName}-ingestion-control'
+
+      BillingMode: PAY_PER_REQUEST
+
+      AttributeDefinitions:
+        - AttributeName: pk
+          AttributeType: S
+        - AttributeName: sk
+          AttributeType: S
+
+      KeySchema:
+        - AttributeName: pk
+          KeyType: HASH
+        - AttributeName: sk
+          KeyType: RANGE
+
+      SSESpecification:
+        SSEEnabled: true
+
+      PointInTimeRecoverySpecification:
+        PointInTimeRecoveryEnabled: true
+
+      Tags:
+        - Key: Name
+          Value: !Sub '${ProjectName}-ingestion-control'
+        - Key: Project
+          Value: !Ref ProjectName
+        - Key: Purpose
+          Value: PipelineControlAndReconciliation
+        - Key: ManagedBy
+          Value: CloudFormation
+
+
+  # ============================================================
+  # Glue Data Catalog - Bronze
+  # ============================================================
+
+  BronzeDatabase:
+    Type: AWS::Glue::Database
+    Properties:
+      CatalogId: !Ref AWS::AccountId
+      DatabaseInput:
+        Name: iata_sales_iac_bronze
+        Description: Bronze Iceberg database for raw IATA sales records
+        LocationUri: !Sub 's3://${LakehouseBucket}/bronze/' 
+
+
+  # ============================================================
+  # Glue Data Catalog - Silver
+  # ============================================================
+
+  SilverDatabase:
+    Type: AWS::Glue::Database
+    Properties:
+      CatalogId: !Ref AWS::AccountId
+      DatabaseInput:
+        Name: iata_sales_iac_silver
+        Description: Silver Iceberg database for validated IATA sales records
+        LocationUri: !Sub 's3://${LakehouseBucket}/silver/' 
+
+
+  # ============================================================
+  # Glue Data Catalog - Quarantine
+  # ============================================================
+
+  QuarantineDatabase:
+    Type: AWS::Glue::Database
+    Properties:
+      CatalogId: !Ref AWS::AccountId
+      DatabaseInput:
+        Name: iata_sales_iac_quarantine
+        Description: Quarantine database for invalid or rejected sales records
+        LocationUri: !Sub 's3://${LakehouseBucket}/quarantine/' 
+
+
+Outputs:
+
+  # ============================================================
+  # S3 Outputs
+  # ============================================================
+
+  LandingBucketName:
+    Description: Landing S3 bucket name
+    Value: !Ref LandingBucket
+    Export:
+      Name: !Sub '${ProjectName}-LandingBucketName'
+
+  LandingBucketArn:
+    Description: Landing S3 bucket ARN
+    Value: !GetAtt LandingBucket.Arn
+    Export:
+      Name: !Sub '${ProjectName}-LandingBucketArn'
+
+
+  LakehouseBucketName:
+    Description: Lakehouse S3 bucket name
+    Value: !Ref LakehouseBucket
+    Export:
+      Name: !Sub '${ProjectName}-LakehouseBucketName'
+
+  LakehouseBucketArn:
+    Description: Lakehouse S3 bucket ARN
+    Value: !GetAtt LakehouseBucket.Arn
+    Export:
+      Name: !Sub '${ProjectName}-LakehouseBucketArn'
+
+
+  ArtifactsBucketName:
+    Description: Deployment artifacts S3 bucket name
+    Value: !Ref ArtifactsBucket
+    Export:
+      Name: !Sub '${ProjectName}-ArtifactsBucketName'
+
+  ArtifactsBucketArn:
+    Description: Deployment artifacts S3 bucket ARN
+    Value: !GetAtt ArtifactsBucket.Arn
+    Export:
+      Name: !Sub '${ProjectName}-ArtifactsBucketArn'
+
+
+  PluginsBucketName:
+    Description: MSK Connect plugin S3 bucket name
+    Value: !Ref PluginsBucket
+    Export:
+      Name: !Sub '${ProjectName}-PluginsBucketName'
+
+  PluginsBucketArn:
+    Description: MSK Connect plugin S3 bucket ARN
+    Value: !GetAtt PluginsBucket.Arn
+    Export:
+      Name: !Sub '${ProjectName}-PluginsBucketArn'
+
+
+  # ============================================================
+  # DynamoDB Outputs
+  # ============================================================
+
+  IngestionControlTableName:
+    Description: DynamoDB ingestion control table name
+    Value: !Ref IngestionControlTable
+    Export:
+      Name: !Sub '${ProjectName}-IngestionControlTableName'
+
+  IngestionControlTableArn:
+    Description: DynamoDB ingestion control table ARN
+    Value: !GetAtt IngestionControlTable.Arn
+    Export:
+      Name: !Sub '${ProjectName}-IngestionControlTableArn'
+
+
+  # ============================================================
+  # Glue Catalog Outputs
+  # ============================================================
+
+  BronzeDatabaseName:
+    Description: Bronze Glue Catalog database
+    Value: !Ref BronzeDatabase
+    Export:
+      Name: !Sub '${ProjectName}-BronzeDatabaseName'
+
+  SilverDatabaseName:
+    Description: Silver Glue Catalog database
+    Value: !Ref SilverDatabase
+    Export:
+      Name: !Sub '${ProjectName}-SilverDatabaseName'
+
+  QuarantineDatabaseName:
+    Description: Quarantine Glue Catalog database
+    Value: !Ref QuarantineDatabase
+    Export:
+      Name: !Sub '${ProjectName}-QuarantineDatabaseName'

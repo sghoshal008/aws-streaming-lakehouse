@@ -1,0 +1,777 @@
+AWSTemplateFormatVersion: '2010-09-09'
+
+Description: >
+  Parent CloudFormation stack for the IATA Sales IaC platform.
+  Orchestrates network, storage, IAM, messaging, compute,
+  Step Functions orchestration and monitoring nested stacks.
+
+# ============================================================
+# Parameters
+# ============================================================
+
+Parameters:
+
+  ProjectName:
+    Type: String
+    Default: iata-sales-iac
+    Description: Common resource naming prefix.
+
+
+  AccountId:
+    Type: String
+    Default: '878670310452'
+    Description: AWS account ID used in globally unique resource names.
+
+
+  # ----------------------------------------------------------
+  # Nested template location
+  #
+  # IMPORTANT:
+  # This bucket must already exist BEFORE deploying main.yaml.
+  # package.sh will upload the child templates here.
+  # ----------------------------------------------------------
+
+  TemplateBucketName:
+    Type: String
+    Description: >
+      Existing S3 bucket containing the packaged nested
+      CloudFormation templates.
+
+  TemplatePrefix:
+    Type: String
+    Default: iata-sales-iac/cloudformation
+    Description: Prefix containing nested CloudFormation templates.
+
+
+  # ----------------------------------------------------------
+  # Alerting
+  # ----------------------------------------------------------
+
+  AlertEmail:
+    Type: String
+    Default: 'sghoshal008@gmail.com'
+    Description: Email address used for pipeline SNS notifications.
+
+
+  # ----------------------------------------------------------
+  # MSK / Connector deployment
+  #
+  # Bootstrap servers are only known after MSK has been created.
+  # ----------------------------------------------------------
+
+  MSKBootstrapServers:
+    Type: String
+    Default: ''
+    Description: >
+      IAM/TLS bootstrap servers for the IaC-created MSK cluster.
+      Populate after the initial MSK deployment.
+
+  DeployIcebergConnector:
+    Type: String
+    Default: 'false'
+    AllowedValues:
+      - 'true'
+      - 'false'
+    Description: >
+      Deploy the MSK Connect Iceberg sink after the cluster,
+      plugin and Kafka topics are ready.
+
+  IcebergPluginFileKey:
+    Type: String
+    Default: msk-connect/iceberg/iata-sales-iac-iceberg-sink-plugin.zip
+    Description: Object key of the Iceberg connector plugin ZIP.
+
+
+  # ----------------------------------------------------------
+  # Application deployment phase
+  #
+  # First deployment:
+  #   DeployApplication=false
+  #
+  # Second deployment after obtaining MSK bootstrap servers:
+  #   DeployApplication=true
+  # ----------------------------------------------------------
+
+  DeployApplication:
+    Type: String
+    Default: 'false'
+    AllowedValues:
+      - 'true'
+      - 'false'
+    Description: >
+      Controls deployment of Glue/Lambda, Step Functions
+      and monitoring resources requiring MSK bootstrap servers.
+
+
+# ============================================================
+# Conditions
+# ============================================================
+
+Conditions:
+
+  CreateApplication:
+    !Equals
+      - !Ref DeployApplication
+      - 'true'
+
+
+# ============================================================
+# Resources
+# ============================================================
+
+Resources:
+
+  # ==========================================================
+  # 1. NETWORK
+  # ==========================================================
+
+  NetworkStack:
+    Type: AWS::CloudFormation::Stack
+
+    Properties:
+
+      TemplateURL: !Sub "https://${TemplateBucketName}.s3.${AWS::Region}.amazonaws.com/${TemplatePrefix}/network.yaml"
+
+      Parameters:
+
+        ProjectName:
+          !Ref ProjectName
+
+        VpcCidr:
+          10.20.0.0/16
+
+        PublicSubnet1Cidr:
+          10.20.101.0/24
+
+        PublicSubnet2Cidr:
+          10.20.102.0/24
+
+        PrivateSubnet1Cidr:
+          10.20.1.0/24
+
+        PrivateSubnet2Cidr:
+          10.20.2.0/24
+
+      Tags:
+
+        - Key: Project
+          Value: !Ref ProjectName
+
+        - Key: Component
+          Value: Network
+
+        - Key: ManagedBy
+          Value: CloudFormation
+
+
+  # ==========================================================
+  # 2. STORAGE
+  # ==========================================================
+
+  StorageStack:
+    Type: AWS::CloudFormation::Stack
+
+    Properties:
+
+      TemplateURL: !Sub "https://${TemplateBucketName}.s3.${AWS::Region}.amazonaws.com/${TemplatePrefix}/storage.yaml"
+
+      Parameters:
+
+        ProjectName:
+          !Ref ProjectName
+
+        AccountId:
+          !Ref AccountId
+
+      Tags:
+
+        - Key: Project
+          Value: !Ref ProjectName
+
+        - Key: Component
+          Value: Storage
+
+        - Key: ManagedBy
+          Value: CloudFormation
+
+
+  # ==========================================================
+  # 3. IAM
+  # ==========================================================
+
+  IAMStack:
+    Type: AWS::CloudFormation::Stack
+
+    DependsOn:
+      - StorageStack
+
+    Properties:
+
+      TemplateURL: !Sub "https://${TemplateBucketName}.s3.${AWS::Region}.amazonaws.com/${TemplatePrefix}/iam.yaml"
+
+      Parameters:
+
+        ProjectName:
+          !Ref ProjectName
+
+        LandingBucketName:
+          !GetAtt StorageStack.Outputs.LandingBucketName
+
+        LakehouseBucketName:
+          !GetAtt StorageStack.Outputs.LakehouseBucketName
+
+        ArtifactsBucketName:
+          !GetAtt StorageStack.Outputs.ArtifactsBucketName
+
+        PluginsBucketName:
+          !GetAtt StorageStack.Outputs.PluginsBucketName
+
+        IngestionControlTableName:
+          !GetAtt StorageStack.Outputs.IngestionControlTableName
+
+      Tags:
+
+        - Key: Project
+          Value: !Ref ProjectName
+
+        - Key: Component
+          Value: IAM
+
+        - Key: ManagedBy
+          Value: CloudFormation
+
+
+  # ==========================================================
+  # 4. MESSAGING / STREAMING
+  #
+  # Creates:
+  # - SNS
+  # - MSK
+  # - Schema Registry
+  # - MSK Connect logs
+  #
+  # Iceberg connector remains optional during phase 1.
+  # ==========================================================
+
+  MessagingStack:
+    Type: AWS::CloudFormation::Stack
+
+    DependsOn:
+      - NetworkStack
+      - StorageStack
+      - IAMStack
+
+    Properties:
+
+      TemplateURL: !Sub "https://${TemplateBucketName}.s3.${AWS::Region}.amazonaws.com/${TemplatePrefix}/messaging.yaml"
+
+      Parameters:
+
+        ProjectName:
+          !Ref ProjectName
+
+
+        # ----------------------------------------------------
+        # Network
+        # ----------------------------------------------------
+
+        PrivateSubnet1Id:
+          !GetAtt NetworkStack.Outputs.PrivateSubnet1Id
+
+        PrivateSubnet2Id:
+          !GetAtt NetworkStack.Outputs.PrivateSubnet2Id
+
+        MSKSecurityGroupId:
+          !GetAtt NetworkStack.Outputs.MSKSecurityGroupId
+
+        MSKConnectSecurityGroupId:
+          !GetAtt NetworkStack.Outputs.MSKConnectSecurityGroupId
+
+
+        # ----------------------------------------------------
+        # Storage
+        # ----------------------------------------------------
+
+        LakehouseBucketName:
+          !GetAtt StorageStack.Outputs.LakehouseBucketName
+
+        PluginsBucketName:
+          !GetAtt StorageStack.Outputs.PluginsBucketName
+
+
+        # ----------------------------------------------------
+        # IAM
+        # ----------------------------------------------------
+
+        IcebergSinkConnectRoleArn:
+          !GetAtt IAMStack.Outputs.IcebergSinkConnectRoleArn
+
+
+        # ----------------------------------------------------
+        # SNS
+        # ----------------------------------------------------
+
+        AlertEmail:
+          !Ref AlertEmail
+
+
+        # ----------------------------------------------------
+        # MSK
+        # ----------------------------------------------------
+
+        KafkaVersion:
+          '3.6.0'
+
+        BrokerInstanceType:
+          kafka.t3.small
+
+        BrokerStorageGiB:
+          '10'
+
+        NumberOfBrokerNodes:
+          '4'
+
+
+        # ----------------------------------------------------
+        # Iceberg connector
+        # ----------------------------------------------------
+
+        DeployIcebergConnector:
+          !Ref DeployIcebergConnector
+
+        MSKBootstrapServers:
+          !Ref MSKBootstrapServers
+
+        IcebergPluginFileKey:
+          !Ref IcebergPluginFileKey
+
+        KafkaConnectVersion:
+          3.7.x
+
+      Tags:
+
+        - Key: Project
+          Value: !Ref ProjectName
+
+        - Key: Component
+          Value: Messaging
+
+        - Key: ManagedBy
+          Value: CloudFormation
+
+
+  # ==========================================================
+  # 5. COMPUTE
+  #
+  # Lambda + both Glue jobs.
+  #
+  # Only deployed after the MSK bootstrap servers are known.
+  # ==========================================================
+
+  ComputeStack:
+    Type: AWS::CloudFormation::Stack
+
+    Condition: CreateApplication
+
+    DependsOn:
+      - NetworkStack
+      - StorageStack
+      - IAMStack
+      - MessagingStack
+
+    Properties:
+
+      TemplateURL: !Sub "https://${TemplateBucketName}.s3.${AWS::Region}.amazonaws.com/${TemplatePrefix}/compute.yaml"
+
+      Parameters:
+
+        ProjectName:
+          !Ref ProjectName
+
+
+        # ----------------------------------------------------
+        # Storage
+        # ----------------------------------------------------
+
+        LandingBucketName:
+          !GetAtt StorageStack.Outputs.LandingBucketName
+
+        LakehouseBucketName:
+          !GetAtt StorageStack.Outputs.LakehouseBucketName
+
+        ArtifactsBucketName:
+          !GetAtt StorageStack.Outputs.ArtifactsBucketName
+
+        IngestionControlTableName:
+          !GetAtt StorageStack.Outputs.IngestionControlTableName
+
+
+        # ----------------------------------------------------
+        # IAM
+        # ----------------------------------------------------
+
+        AcquisitionLambdaRoleArn:
+          !GetAtt IAMStack.Outputs.AcquisitionLambdaRoleArn
+
+        GlueLandingToMSKRoleArn:
+          !GetAtt IAMStack.Outputs.GlueLandingToMSKRoleArn
+
+        GlueBronzeToSilverRoleArn:
+          !GetAtt IAMStack.Outputs.GlueBronzeToSilverRoleArn
+
+
+        # ----------------------------------------------------
+        # Network
+        # ----------------------------------------------------
+
+        GlueSubnetId:
+          !GetAtt NetworkStack.Outputs.PrivateSubnet1Id
+
+        GlueSecurityGroupId:
+          !GetAtt NetworkStack.Outputs.GlueSecurityGroupId
+
+        GlueAvailabilityZone:
+          ap-southeast-1a
+
+
+        # ----------------------------------------------------
+        # MSK
+        # ----------------------------------------------------
+
+        MSKBootstrapServers:
+          !Ref MSKBootstrapServers
+
+
+        # ----------------------------------------------------
+        # Acquisition
+        # ----------------------------------------------------
+
+        SourceName:
+          sales
+
+        DatasetName:
+          sales_records
+
+      Tags:
+
+        - Key: Project
+          Value: !Ref ProjectName
+
+        - Key: Component
+          Value: Compute
+
+        - Key: ManagedBy
+          Value: CloudFormation
+
+
+  # ==========================================================
+  # 6. ORCHESTRATION
+  #
+  # Creates:
+  # - ingestion state machine
+  # - Bronze -> Silver state machine
+  # ==========================================================
+
+  OrchestrationStack:
+    Type: AWS::CloudFormation::Stack
+
+    Condition: CreateApplication
+
+    DependsOn:
+      - ComputeStack
+      - MessagingStack
+
+    Properties:
+
+      TemplateURL: !Sub "https://${TemplateBucketName}.s3.${AWS::Region}.amazonaws.com/${TemplatePrefix}/orchestration.yaml"
+
+      Parameters:
+
+        ProjectName:
+          !Ref ProjectName
+
+
+        # ----------------------------------------------------
+        # Compute
+        # ----------------------------------------------------
+
+        AcquisitionLambdaName:
+          !GetAtt ComputeStack.Outputs.AcquisitionLambdaName
+
+        LandingToMSKGlueJobName:
+          !GetAtt ComputeStack.Outputs.LandingToMSKGlueJobName
+
+        BronzeToSilverGlueJobName:
+          !GetAtt ComputeStack.Outputs.BronzeToSilverGlueJobName
+
+
+        # ----------------------------------------------------
+        # DynamoDB
+        # ----------------------------------------------------
+
+        IngestionControlTableName:
+          !GetAtt StorageStack.Outputs.IngestionControlTableName
+
+
+        # ----------------------------------------------------
+        # SNS
+        # ----------------------------------------------------
+
+        NotificationTopicArn:
+          !GetAtt MessagingStack.Outputs.PipelineAlertTopicArn
+
+
+        # ----------------------------------------------------
+        # IAM
+        # ----------------------------------------------------
+
+        IngestionStateMachineRoleArn:
+          !GetAtt IAMStack.Outputs.StepFunctionsIngestionRoleArn
+
+        BronzeToSilverStateMachineRoleArn:
+          !GetAtt IAMStack.Outputs.StepFunctionsBronzeToSilverRoleArn
+
+      Tags:
+
+        - Key: Project
+          Value: !Ref ProjectName
+
+        - Key: Component
+          Value: Orchestration
+
+        - Key: ManagedBy
+          Value: CloudFormation
+
+
+  # ==========================================================
+  # 7. MONITORING
+  # ==========================================================
+
+  MonitoringStack:
+    Type: AWS::CloudFormation::Stack
+
+    Condition: CreateApplication
+
+    DependsOn:
+      - ComputeStack
+      - OrchestrationStack
+      - MessagingStack
+
+    Properties:
+
+      TemplateURL: !Sub "https://${TemplateBucketName}.s3.${AWS::Region}.amazonaws.com/${TemplatePrefix}/monitoring.yaml"
+
+      Parameters:
+
+        ProjectName:
+          !Ref ProjectName
+
+
+        # ----------------------------------------------------
+        # SNS
+        # ----------------------------------------------------
+
+        NotificationTopicArn:
+          !GetAtt MessagingStack.Outputs.PipelineAlertTopicArn
+
+
+        # ----------------------------------------------------
+        # Compute
+        # ----------------------------------------------------
+
+        AcquisitionLambdaName:
+          !GetAtt ComputeStack.Outputs.AcquisitionLambdaName
+
+        LandingToMSKGlueJobName:
+          !GetAtt ComputeStack.Outputs.LandingToMSKGlueJobName
+
+        BronzeToSilverGlueJobName:
+          !GetAtt ComputeStack.Outputs.BronzeToSilverGlueJobName
+
+
+        # ----------------------------------------------------
+        # Step Functions
+        # ----------------------------------------------------
+
+        IngestionStateMachineArn:
+          !GetAtt OrchestrationStack.Outputs.IngestionStateMachineArn
+
+        BronzeToSilverStateMachineArn:
+          !GetAtt OrchestrationStack.Outputs.BronzeToSilverStateMachineArn
+
+
+        # ----------------------------------------------------
+        # MSK
+        # ----------------------------------------------------
+
+        MSKClusterName:
+          !GetAtt MessagingStack.Outputs.MSKClusterName
+
+        MainKafkaTopic:
+          !Sub '${ProjectName}-records'
+
+
+        # ----------------------------------------------------
+        # MSK Connect
+        # ----------------------------------------------------
+
+        MSKConnectConnectorName:
+          !Sub '${ProjectName}-iceberg-sink'
+
+        MSKConnectConsumerGroup:
+          !Sub 'connect-${ProjectName}-iceberg-sink'
+
+      Tags:
+
+        - Key: Project
+          Value: !Ref ProjectName
+
+        - Key: Component
+          Value: Monitoring
+
+        - Key: ManagedBy
+          Value: CloudFormation
+
+
+# ============================================================
+# Outputs
+# ============================================================
+
+Outputs:
+
+  # ==========================================================
+  # Network
+  # ==========================================================
+
+  VpcId:
+    Description: IATA Sales IaC VPC
+    Value:
+      !GetAtt NetworkStack.Outputs.VpcId
+
+
+  PrivateSubnet1Id:
+    Description: Private subnet 1
+    Value:
+      !GetAtt NetworkStack.Outputs.PrivateSubnet1Id
+
+
+  PrivateSubnet2Id:
+    Description: Private subnet 2
+    Value:
+      !GetAtt NetworkStack.Outputs.PrivateSubnet2Id
+
+
+  # ==========================================================
+  # Storage
+  # ==========================================================
+
+  LandingBucketName:
+    Description: Landing S3 bucket
+    Value:
+      !GetAtt StorageStack.Outputs.LandingBucketName
+
+
+  LakehouseBucketName:
+    Description: Lakehouse S3 bucket
+    Value:
+      !GetAtt StorageStack.Outputs.LakehouseBucketName
+
+
+  ArtifactsBucketName:
+    Description: Artifacts S3 bucket
+    Value:
+      !GetAtt StorageStack.Outputs.ArtifactsBucketName
+
+
+  PluginsBucketName:
+    Description: MSK Connect plugins S3 bucket
+    Value:
+      !GetAtt StorageStack.Outputs.PluginsBucketName
+
+
+  IngestionControlTableName:
+    Description: Pipeline DynamoDB control table
+    Value:
+      !GetAtt StorageStack.Outputs.IngestionControlTableName
+
+
+  # ==========================================================
+  # Messaging
+  # ==========================================================
+
+  PipelineAlertTopicArn:
+    Description: Pipeline SNS alert topic
+    Value:
+      !GetAtt MessagingStack.Outputs.PipelineAlertTopicArn
+
+
+  MSKClusterArn:
+    Description: Amazon MSK cluster ARN
+    Value:
+      !GetAtt MessagingStack.Outputs.MSKClusterArn
+
+
+  MSKClusterName:
+    Description: Amazon MSK cluster name
+    Value:
+      !GetAtt MessagingStack.Outputs.MSKClusterName
+
+
+  SchemaRegistryArn:
+    Description: Glue Schema Registry ARN
+    Value:
+      !GetAtt MessagingStack.Outputs.SalesSchemaRegistryArn
+
+
+  # ==========================================================
+  # Compute - conditional
+  # ==========================================================
+
+  AcquisitionLambdaName:
+    Condition: CreateApplication
+    Description: Acquisition Lambda
+    Value:
+      !GetAtt ComputeStack.Outputs.AcquisitionLambdaName
+
+
+  LandingToMSKGlueJobName:
+    Condition: CreateApplication
+    Description: Landing to MSK Glue job
+    Value:
+      !GetAtt ComputeStack.Outputs.LandingToMSKGlueJobName
+
+
+  BronzeToSilverGlueJobName:
+    Condition: CreateApplication
+    Description: Bronze to Silver Glue job
+    Value:
+      !GetAtt ComputeStack.Outputs.BronzeToSilverGlueJobName
+
+
+  # ==========================================================
+  # Orchestration - conditional
+  # ==========================================================
+
+  IngestionStateMachineArn:
+    Condition: CreateApplication
+    Description: Ingestion state machine
+    Value:
+      !GetAtt OrchestrationStack.Outputs.IngestionStateMachineArn
+
+
+  BronzeToSilverStateMachineArn:
+    Condition: CreateApplication
+    Description: Bronze to Silver state machine
+    Value:
+      !GetAtt OrchestrationStack.Outputs.BronzeToSilverStateMachineArn
+
+
+  # ==========================================================
+  # Monitoring - conditional
+  # ==========================================================
+
+  PipelineDashboardName:
+    Condition: CreateApplication
+    Description: CloudWatch operational dashboard
+    Value:
+      !GetAtt MonitoringStack.Outputs.PipelineDashboardName
