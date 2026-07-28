@@ -26,7 +26,7 @@ The implementation intentionally treats **file acquisition as batch** and **reco
 
 ## 2. Architecture
 
-![IATA Sales Streaming Lakehouse Architecture](docs/architecture/iata-sales-streaming-lakehouse.png)
+![IATA Sales Streaming Lakehouse Architecture](images/architecture.png)
 
 > `EventBridge` is shown in the architecture as the intended production scheduler. It is **not deployed in the demo stack**. For the case-study demonstration, the ingestion Step Function is started manually so each execution is deliberate and easy to observe.
 
