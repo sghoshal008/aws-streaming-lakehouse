@@ -1013,20 +1013,56 @@ MSK bootstrap endpoints are generated only after the cluster exists. Phase 1 cre
 
 ## 20. Production hardening / next steps
 
-Given more time I would add:
+Given more time, I would harden and evolve the solution in the following areas:
 
-1. source-level conditional fingerprint idempotency in acquisition;
-2. EventBridge scheduling;
-3. CI/CD using GitHub Actions or an enterprise pipeline with AWS OIDC;
-4. a dedicated least-privilege deployment role instead of sandbox AdministratorAccess;
-5. automated integration/data-quality tests;
-6. explicit Bronze sink completion/reconciliation if end-to-end synchronous acknowledgement becomes a requirement;
-7. environment parameterisation for dev/test/prod;
-8. Secrets Manager where external sources require credentials;
-9. AWS Budgets/Cost Anomaly Detection and deeper cost allocation;
-10. longer production log retention and centralised observability;
-11. plugin build/download automation with checksums and version pinning;
-12. stronger schema governance and runtime Schema Registry integration if Avro/Protobuf is adopted.
+1. Add source-level conditional fingerprint idempotency during acquisition so the same source version cannot be accepted twice accidentally.
+
+2. Add Amazon EventBridge schedules for both the ingestion and Bronze-to-Silver Step Functions, with environment-specific scheduling and concurrency controls.
+
+3. Implement CI/CD using GitHub Actions or an enterprise pipeline with AWS OIDC, approval gates, automated validation and controlled promotion across environments.
+
+4. Replace sandbox `AdministratorAccess` with a dedicated least-privilege deployment role scoped to the CloudFormation resources and actions required by the project.
+
+5. Add explicit Bronze sink completion and reconciliation if the business requires the ingestion workflow to confirm that Kafka records have been committed successfully into Bronze before reporting end-to-end completion.
+
+6. Parameterise the solution for dev, test and production environments, including naming, sizing, retention, schedules, alarms and cost thresholds.
+
+7. Use AWS Secrets Manager for external-source credentials, API keys or other sensitive configuration if the provider later requires authenticated access.
+
+8. Add AWS Budgets, Cost Anomaly Detection, cost-allocation tags and more detailed service-level cost reporting.
+
+9. Increase production log retention and introduce centralised observability, structured logging, trace correlation and operational dashboards across Lambda, Glue, Step Functions, MSK and MSK Connect.
+
+10. Automate the Iceberg Kafka Connect plugin build.
+
+12. Strengthen schema governance by serialising Kafka messages with Avro and integrating AWS Glue Schema Registry.
+
+    The current demo publishes schemaless JSON because it is simple to inspect, easy to troubleshoot and avoids adding extra runtime dependencies and serializer/deserializer configuration within the limited case-study timeline.
+
+    A production implementation would:
+    - define and version an Avro schema;
+    - validate records against AWS Glue Schema Registry before publication;
+    - use the Glue Schema Registry serializer in the Glue producer;
+    - configure the compatible deserializer/converter path for Kafka Connect;
+    - enforce compatibility rules such as backward compatibility;
+    - support controlled schema evolution.
+
+    This was not implemented in the demo because it would require additional JARs and client libraries, more complex Spark-to-Kafka serialisation logic, registry IAM permissions, connector-side compatibility configuration, schema-evolution testing and additional deployment/debugging effort. Given the available time, JSON allowed the core streaming, Iceberg and replay design to be demonstrated reliably.
+
+13. Add S3 lifecycle and archival policies.
+
+    The current S3 buckets use versioning and encryption but do not transition older objects into archival storage classes.
+
+    In production, I would define lifecycle rules such as:
+    - transition original archived ZIP files to S3 Glacier Instant Retrieval or Glacier Flexible Retrieval after a defined retention period;
+    - transition old landing files and non-current object versions to lower-cost storage;
+    - expire temporary Glue artifacts, logs and obsolete object versions;
+    - retain Iceberg metadata and data files according to table-maintenance and compliance requirements;
+    - avoid archiving active Iceberg files without coordinating with Iceberg snapshot expiration and orphan-file cleanup.
+
+    This was left out of the demo because lifecycle design depends on business retention, recovery-time and compliance requirements. Applying Glacier policies without those requirements could make reprocessing slower or interfere with active Iceberg data management.
+
+14. Add regular Iceberg maintenance operations, including snapshot expiration, orphan-file removal and small-file compaction, with retention policies aligned to replay and audit requirements.
 
 ---
 
