@@ -1,4 +1,4 @@
-# IATA Sales Streaming Lakehouse — AWS Data Engineering Case Study
+# Sales Streaming Lakehouse — AWS Data Engineering Case Study
 
 > End-to-end AWS data engineering pipeline demonstrating batch acquisition, Kafka streaming with Amazon MSK, Apache Iceberg Bronze/Silver lakehouse design, AWS Glue/Spark processing, Step Functions orchestration, Athena serving, CloudWatch observability, and CloudFormation Infrastructure as Code.
 
