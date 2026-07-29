@@ -1,3 +1,33 @@
+
+deploy.sh phase1
+        │
+        ├─ Read configuration
+        ├─ Validate argument
+        ├─ Verify AWS credentials
+        ├─ Validate main.yaml
+        ├─ Build CloudFormation parameters
+        └─ Run aws cloudformation deploy
+                    │
+                    ▼
+                 main.yaml
+                    │
+                    ├─ network.yaml
+                    ├─ storage.yaml
+                    ├─ iam.yaml
+                    └─ messaging.yaml
+                           ├─ SNS
+                           ├─ MSK
+                           └─ Schema Registry
+
+Phase 1 skips:
+    compute.yaml
+    orchestration.yaml
+    monitoring.yaml
+    Iceberg MSK Connect connector
+
+
+  
+
 FULL DEPLOYMENT FLOW
 │
 ├── STEP 1 — PACKAGE #1
