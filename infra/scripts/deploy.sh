@@ -3,7 +3,7 @@
 set -euo pipefail
 
 # ============================================================
-# IATA Sales IaC - Deployment Script
+# yt Sales IaC - Deployment Script
 #
 # Usage:
 #
@@ -36,12 +36,12 @@ set -euo pipefail
 AWS_REGION="${AWS_REGION:-ap-southeast-1}"
 AWS_ACCOUNT_ID="${AWS_ACCOUNT_ID:-878670310452}"
 
-PROJECT_NAME="${PROJECT_NAME:-iata-sales-iac}"
-STACK_NAME="${STACK_NAME:-iata-sales-iac}"
+PROJECT_NAME="${PROJECT_NAME:-yt-sales-iac}"
+STACK_NAME="${STACK_NAME:-yt-sales-iac}"
 
 MSK_CLUSTER_NAME="${MSK_CLUSTER_NAME:-${PROJECT_NAME}-msk}"
 
-BOOTSTRAP_BUCKET="${BOOTSTRAP_BUCKET:-iata-sales-iac-bootstrap-${AWS_ACCOUNT_ID}}"
+BOOTSTRAP_BUCKET="${BOOTSTRAP_BUCKET:-yt-sales-iac-bootstrap-${AWS_ACCOUNT_ID}}"
 TEMPLATE_PREFIX="${TEMPLATE_PREFIX:-${PROJECT_NAME}/cloudformation}"
 
 ARTIFACTS_BUCKET="${ARTIFACTS_BUCKET:-${PROJECT_NAME}-artifacts-${AWS_ACCOUNT_ID}}"
@@ -183,7 +183,7 @@ run_athena_sql() {
     #
     # becomes:
     #
-    #   s3://iata-sales-iac-lakehouse-<account>/bronze/sales_raw
+    #   s3://yt-sales-iac-lakehouse-<account>/bronze/sales_raw
     # ========================================================
 
     sql="${sql//__LAKEHOUSE_BUCKET__/${LAKEHOUSE_BUCKET}}"
@@ -330,7 +330,7 @@ run_athena_sql() {
 # PRE-FLIGHT
 # ============================================================
 
-section "IATA Sales IaC Deployment"
+section "yt Sales IaC Deployment"
 
 echo "Phase:              ${PHASE}"
 echo "Stack:              ${STACK_NAME}"
@@ -532,7 +532,7 @@ if [[ "${PHASE}" == "phase2" ]]; then
 
     require_s3_object \
         "${PLUGINS_BUCKET}" \
-        "msk-connect/iceberg/iata-sales-iac-iceberg-sink-plugin.zip"
+        "msk-connect/iceberg/yt-sales-iac-iceberg-sink-plugin.zip"
 
     echo "Runtime artifacts verified."
 

@@ -1,7 +1,7 @@
 AWSTemplateFormatVersion: '2010-09-09'
 
 Description: >
-  Monitoring and operational observability for the IATA Sales IaC pipeline.
+  Monitoring and operational observability for the yt Sales IaC pipeline.
   Creates the CloudWatch operational dashboard and alarms for acquisition,
   Step Functions, Amazon MSK and the Iceberg MSK Connect sink.
 
@@ -13,7 +13,7 @@ Parameters:
 
   ProjectName:
     Type: String
-    Default: iata-sales-iac
+    Default: yt-sales-iac
     Description: Common resource naming prefix.
 
   # ----------------------------------------------------------
@@ -32,15 +32,15 @@ Parameters:
 
   AcquisitionLambdaName:
     Type: String
-    Default: iata-sales-iac-acquisition
+    Default: yt-sales-iac-acquisition
 
   LandingToMSKGlueJobName:
     Type: String
-    Default: iata-sales-iac-landing-to-msk
+    Default: yt-sales-iac-landing-to-msk
 
   BronzeToSilverGlueJobName:
     Type: String
-    Default: iata-sales-iac-bronze-to-silver
+    Default: yt-sales-iac-bronze-to-silver
 
   # ----------------------------------------------------------
   # Step Functions
@@ -60,11 +60,11 @@ Parameters:
 
   MSKClusterName:
     Type: String
-    Default: iata-sales-iac-msk
+    Default: yt-sales-iac-msk
 
   MainKafkaTopic:
     Type: String
-    Default: iata-sales-iac-records
+    Default: yt-sales-iac-records
 
   # Used only by the topic-throughput dashboard widget.
   # We can verify/change this after the new cluster is running.
@@ -78,13 +78,13 @@ Parameters:
 
   MSKConnectConnectorName:
     Type: String
-    Default: iata-sales-iac-iceberg-sink
+    Default: yt-sales-iac-iceberg-sink
 
   # Expected Kafka Connect consumer-group convention.
   # Verify this after the IaC connector is running.
   MSKConnectConsumerGroup:
     Type: String
-    Default: connect-iata-sales-iac-iceberg-sink
+    Default: connect-yt-sales-iac-iceberg-sink
 
   # ----------------------------------------------------------
   # Cost governance
@@ -160,7 +160,7 @@ Resources:
                 "height": 3,
 
                 "properties": {
-                  "markdown": "# ⚡ IATA Sales Pipeline | System Health\n\n**Deployment:** `IaC` &nbsp;&nbsp; **Region:** `${AWS::Region}` &nbsp;&nbsp; **Pipeline:** `Sales`\n\n> **Operational Overview** — Ingestion • Streaming • Iceberg Lakehouse • Transformation"
+                  "markdown": "# ⚡ yt Sales Pipeline | System Health\n\n**Deployment:** `IaC` &nbsp;&nbsp; **Region:** `${AWS::Region}` &nbsp;&nbsp; **Pipeline:** `Sales`\n\n> **Operational Overview** — Ingestion • Streaming • Iceberg Lakehouse • Transformation"
                 }
               },
 
@@ -845,7 +845,7 @@ Resources:
         !Sub '${ProjectName}-ingestion-pipeline-failed'
 
       AlarmDescription: >
-        Alarm when the IATA Sales ingestion state machine fails.
+        Alarm when the yt Sales ingestion state machine fails.
 
       Namespace: AWS/States
 
@@ -1062,7 +1062,7 @@ Outputs:
 
   PipelineDashboardName:
 
-    Description: IATA Sales operational CloudWatch dashboard
+    Description: yt Sales operational CloudWatch dashboard
 
     Value:
       !Ref PipelineDashboard

@@ -45,15 +45,15 @@ The wrapper performs repository validation, packaging and the phased CloudFormat
 ## Verify
 
 ```bash
-aws cloudformation describe-stacks   --stack-name iata-sales-iac   --region "$AWS_REGION"   --query "Stacks[0].[StackStatus,StackStatusReason]"   --output table
+aws cloudformation describe-stacks   --stack-name yt-sales-iac   --region "$AWS_REGION"   --query "Stacks[0].[StackStatus,StackStatusReason]"   --output table
 ```
 
 ```bash
-aws cloudformation describe-stacks   --stack-name iata-sales-iac   --region "$AWS_REGION"   --query "Stacks[0].Outputs"   --output table
+aws cloudformation describe-stacks   --stack-name yt-sales-iac   --region "$AWS_REGION"   --query "Stacks[0].Outputs"   --output table
 ```
 
 ```bash
-aws cloudformation describe-stack-resources   --stack-name iata-sales-iac   --region "$AWS_REGION"   --output table
+aws cloudformation describe-stack-resources   --stack-name yt-sales-iac   --region "$AWS_REGION"   --output table
 ```
 
 ## Diagnose CloudFormation Failures
@@ -61,13 +61,13 @@ aws cloudformation describe-stack-resources   --stack-name iata-sales-iac   --re
 Creation:
 
 ```bash
-aws cloudformation describe-stack-events   --stack-name iata-sales-iac   --region "$AWS_REGION"   --query "StackEvents[?ResourceStatus=='CREATE_FAILED'].[Timestamp,LogicalResourceId,ResourceType,PhysicalResourceId,ResourceStatusReason]"   --output table
+aws cloudformation describe-stack-events   --stack-name yt-sales-iac   --region "$AWS_REGION"   --query "StackEvents[?ResourceStatus=='CREATE_FAILED'].[Timestamp,LogicalResourceId,ResourceType,PhysicalResourceId,ResourceStatusReason]"   --output table
 ```
 
 Deletion:
 
 ```bash
-aws cloudformation describe-stack-events   --stack-name iata-sales-iac   --region "$AWS_REGION"   --query "StackEvents[?ResourceStatus=='DELETE_FAILED'].[Timestamp,LogicalResourceId,ResourceType,PhysicalResourceId,ResourceStatusReason]"   --output table
+aws cloudformation describe-stack-events   --stack-name yt-sales-iac   --region "$AWS_REGION"   --query "StackEvents[?ResourceStatus=='DELETE_FAILED'].[Timestamp,LogicalResourceId,ResourceType,PhysicalResourceId,ResourceStatusReason]"   --output table
 ```
 
 For a failed nested stack, rerun the command against the nested-stack ARN reported by the root stack.

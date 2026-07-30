@@ -1,7 +1,7 @@
 AWSTemplateFormatVersion: '2010-09-09'
 
 Description: >
-  Network infrastructure for the IATA Sales IaC pipeline.
+  Network infrastructure for the yt Sales IaC pipeline.
   Creates a two-AZ VPC with public and private subnets, Internet Gateway,
   a single NAT Gateway, an S3 Gateway VPC Endpoint, and security groups
   for Lambda, AWS Glue, Amazon MSK, and MSK Connect.
@@ -10,7 +10,7 @@ Parameters:
 
   ProjectName:
     Type: String
-    Default: iata-sales-iac
+    Default: yt-sales-iac
     Description: Resource naming prefix.
 
   VpcCidr:
@@ -309,7 +309,7 @@ Resources:
     Type: AWS::EC2::SecurityGroup
     Properties:
       GroupName: !Sub '${ProjectName}-lambda-sg'
-      GroupDescription: Security group for IATA Sales acquisition Lambda
+      GroupDescription: Security group for yt Sales acquisition Lambda
       VpcId: !Ref VPC
       SecurityGroupEgress:
         - IpProtocol: tcp
@@ -337,7 +337,7 @@ Resources:
     Type: AWS::EC2::SecurityGroup
     Properties:
       GroupName: !Sub '${ProjectName}-glue-sg'
-      GroupDescription: Security group for IATA Sales Glue Spark jobs
+      GroupDescription: Security group for yt Sales Glue Spark jobs
       VpcId: !Ref VPC
       SecurityGroupEgress:
         - IpProtocol: '-1'
@@ -374,7 +374,7 @@ Resources:
     Type: AWS::EC2::SecurityGroup
     Properties:
       GroupName: !Sub '${ProjectName}-sink-connect-sg'
-      GroupDescription: Security group for IATA Sales Iceberg sink connector
+      GroupDescription: Security group for yt Sales Iceberg sink connector
       VpcId: !Ref VPC
       SecurityGroupEgress:
         - IpProtocol: tcp
@@ -402,7 +402,7 @@ Resources:
     Type: AWS::EC2::SecurityGroup
     Properties:
       GroupName: !Sub '${ProjectName}-msk-sg'
-      GroupDescription: Security group for IATA Sales Amazon MSK brokers
+      GroupDescription: Security group for yt Sales Amazon MSK brokers
       VpcId: !Ref VPC
       SecurityGroupEgress:
         - IpProtocol: '-1'
@@ -466,13 +466,13 @@ Resources:
 Outputs:
 
   VpcId:
-    Description: IATA Sales IaC VPC ID
+    Description: yt Sales IaC VPC ID
     Value: !Ref VPC
     Export:
       Name: !Sub '${ProjectName}-VpcId'
 
   VpcCidr:
-    Description: IATA Sales IaC VPC CIDR
+    Description: yt Sales IaC VPC CIDR
     Value: !Ref VpcCidr
     Export:
       Name: !Sub '${ProjectName}-VpcCidr'

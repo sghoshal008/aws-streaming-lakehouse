@@ -1,7 +1,7 @@
 AWSTemplateFormatVersion: '2010-09-09'
 
 Description: >
-  Messaging and streaming infrastructure for the IATA Sales IaC pipeline.
+  Messaging and streaming infrastructure for the yt Sales IaC pipeline.
   Creates SNS pipeline alerts, Amazon MSK, AWS Glue Schema Registry,
   MSK Connect logging, an Iceberg custom plugin, and the Iceberg sink connector.
 
@@ -9,7 +9,7 @@ Parameters:
 
   ProjectName:
     Type: String
-    Default: iata-sales-iac
+    Default: yt-sales-iac
     Description: Common resource naming prefix.
 
   # ------------------------------------------------------------
@@ -39,7 +39,7 @@ Parameters:
 
   LakehouseBucketName:
     Type: String
-    Description: IATA Sales lakehouse bucket name.
+    Description: yt Sales lakehouse bucket name.
 
   PluginsBucketName:
     Type: String
@@ -116,7 +116,7 @@ Parameters:
 
   IcebergPluginFileKey:
     Type: String
-    Default: msk-connect/iceberg/iata-sales-iac-iceberg-sink-plugin.zip
+    Default: msk-connect/iceberg/yt-sales-iac-iceberg-sink-plugin.zip
     Description: >
       S3 object key of the Iceberg Kafka Connect plugin ZIP
       inside the plugins bucket.
@@ -150,7 +150,7 @@ Resources:
     Type: AWS::SNS::Topic
     Properties:
       TopicName: !Sub '${ProjectName}-pipeline-alerts'
-      DisplayName: IATA Sales Alerts
+      DisplayName: yt Sales Alerts
 
       Tags:
         - Key: Project
@@ -329,7 +329,7 @@ Resources:
       Name: !Sub '${ProjectName}-schema-registry'
 
       Description: >
-        Central schema registry for IATA Sales Kafka message
+        Central schema registry for yt Sales Kafka message
         contracts and future schema-governed producers.
 
       Tags:
@@ -348,7 +348,7 @@ Resources:
       Name: !Sub '${ProjectName}-sales-record-schema'
 
       Description: >
-        Initial JSON contract for IATA Sales Kafka records.
+        Initial JSON contract for yt Sales Kafka records.
         The current producer remains plain JSON and is not yet
         coupled to Glue Schema Registry serialization.
 
@@ -365,8 +365,8 @@ Resources:
       SchemaDefinition: |
         {
           "$schema": "http://json-schema.org/draft-07/schema#",
-          "title": "IATA Sales Bronze Record",
-          "description": "Governance contract matching the records published to iata-sales-iac-records",
+          "title": "yt Sales Bronze Record",
+          "description": "Governance contract matching the records published to yt-sales-iac-records",
           "type": "object",
           "additionalProperties": false,
           "properties": {
@@ -440,7 +440,7 @@ Resources:
 
       Description: >
         Apache Iceberg Kafka Connect sink plugin for the
-        IATA Sales Bronze Iceberg table.
+        yt Sales Bronze Iceberg table.
 
       ContentType: ZIP
 
@@ -481,7 +481,7 @@ Resources:
       ConnectorName: !Sub '${ProjectName}-iceberg-sink'
 
       ConnectorDescription: >
-        Consumes IATA Sales Kafka records and persists them
+        Consumes yt Sales Kafka records and persists them
         to the Bronze Apache Iceberg table in Amazon S3.
 
 

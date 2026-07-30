@@ -21,10 +21,10 @@ EventBridge is the intended scheduler for both workflows but is disabled for the
 
 ## Architecture Diagram
 
-Place the final image here as `iata-sales-streaming-lakehouse.png` and embed it with:
+Place the final image here as `yt-sales-streaming-lakehouse.png` and embed it with:
 
 ```markdown
-![IATA Sales Streaming Lakehouse](iata-sales-streaming-lakehouse.png)
+![yt Sales Streaming Lakehouse](yt-sales-streaming-lakehouse.png)
 ```
 
 ## Ingestion
@@ -43,9 +43,9 @@ Kafka topics:
 
 | Topic | Purpose |
 |---|---|
-| `iata-sales-iac-records` | Main sales stream |
-| `iata-sales-iac-errors` | Kafka Connect / sink error records |
-| `iata-sales-iac-control-iceberg` | Iceberg connector control topic |
+| `yt-sales-iac-records` | Main sales stream |
+| `yt-sales-iac-errors` | Kafka Connect / sink error records |
+| `yt-sales-iac-control-iceberg` | Iceberg connector control topic |
 
 Amazon MSK Connect runs the Apache Iceberg Sink Connector. The custom plugin/JAR bundle uses the Glue Data Catalog and S3-backed Iceberg storage (`S3FileIO`) and tracks Kafka consumer offsets.
 
@@ -74,7 +74,7 @@ The Step Function retrieves the run summary after Glue completes. Quarantined re
 
 ## DynamoDB Control Model
 
-Control table: `iata-sales-iac-ingestion-control`
+Control table: `yt-sales-iac-ingestion-control`
 
 | PK | SK | Purpose |
 |---|---|---|

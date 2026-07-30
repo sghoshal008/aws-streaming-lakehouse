@@ -1,7 +1,7 @@
 AWSTemplateFormatVersion: '2010-09-09'
 
 Description: >
-  Orchestration layer for the IATA Sales IaC pipeline.
+  Orchestration layer for the yt Sales IaC pipeline.
   Creates the ingestion and Bronze-to-Silver AWS Step Functions
   state machines and their CloudWatch log groups.
 
@@ -13,7 +13,7 @@ Parameters:
 
   ProjectName:
     Type: String
-    Default: iata-sales-iac
+    Default: yt-sales-iac
     Description: Common resource naming prefix.
 
 
@@ -23,17 +23,17 @@ Parameters:
 
   AcquisitionLambdaName:
     Type: String
-    Default: iata-sales-iac-acquisition
+    Default: yt-sales-iac-acquisition
     Description: Acquisition Lambda function name.
 
   LandingToMSKGlueJobName:
     Type: String
-    Default: iata-sales-iac-landing-to-msk
+    Default: yt-sales-iac-landing-to-msk
     Description: Landing-to-MSK Glue job name.
 
   BronzeToSilverGlueJobName:
     Type: String
-    Default: iata-sales-iac-bronze-to-silver
+    Default: yt-sales-iac-bronze-to-silver
     Description: Bronze-to-Silver Glue job name.
 
 
@@ -43,7 +43,7 @@ Parameters:
 
   IngestionControlTableName:
     Type: String
-    Default: iata-sales-iac-ingestion-control
+    Default: yt-sales-iac-ingestion-control
     Description: DynamoDB ingestion and processing control table.
 
 
@@ -222,7 +222,7 @@ Resources:
 
       DefinitionString: |
         {
-          "Comment": "IATA Sales acquisition and MSK producer pipeline",
+          "Comment": "yt Sales acquisition and MSK producer pipeline",
           "StartAt": "Run Acquisition",
 
           "States": {
@@ -455,9 +455,9 @@ Resources:
 
                 "TopicArn": "${NotificationTopicArn}",
 
-                "Subject": "IATA Sales - Acquisition FAILED",
+                "Subject": "yt Sales - Acquisition FAILED",
 
-                "Message.$": "States.Format('IATA Sales ingestion pipeline failed at Acquisition Lambda. Execution: {}. Error: {}', $$.Execution.Name, $.error.Cause)"
+                "Message.$": "States.Format('yt Sales ingestion pipeline failed at Acquisition Lambda. Execution: {}. Error: {}', $$.Execution.Name, $.error.Cause)"
               },
 
               "Next": "Ingestion Pipeline Failed",
@@ -482,9 +482,9 @@ Resources:
 
                 "TopicArn": "${NotificationTopicArn}",
 
-                "Subject": "IATA Sales - Landing to MSK FAILED",
+                "Subject": "yt Sales - Landing to MSK FAILED",
 
-                "Message.$": "States.Format('IATA Sales ingestion pipeline failed. Run ID: {}. Stage: Landing to MSK Glue Producer. Error: {}', $.acquisition.run_id, $.error.Cause)"
+                "Message.$": "States.Format('yt Sales ingestion pipeline failed. Run ID: {}. Stage: Landing to MSK Glue Producer. Error: {}', $.acquisition.run_id, $.error.Cause)"
               },
 
               "Next": "Ingestion Pipeline Failed",
@@ -509,9 +509,9 @@ Resources:
 
                 "TopicArn": "${NotificationTopicArn}",
 
-                "Subject": "IATA Sales - Control Table Update FAILED",
+                "Subject": "yt Sales - Control Table Update FAILED",
 
-                "Message.$": "States.Format('IATA Sales data was published to MSK, but the ingestion control table update failed. Run ID: {}. Error: {}', $.acquisition.run_id, $.error.Cause)"
+                "Message.$": "States.Format('yt Sales data was published to MSK, but the ingestion control table update failed. Run ID: {}. Error: {}', $.acquisition.run_id, $.error.Cause)"
               },
 
               "Next": "Ingestion Pipeline Failed",
@@ -536,7 +536,7 @@ Resources:
             "Ingestion Pipeline Failed": {
               "Type": "Fail",
               "Error": "IATASalesIngestionFailed",
-              "Cause": "IATA Sales ingestion pipeline failed"
+              "Cause": "yt Sales ingestion pipeline failed"
             }
           }
         }
@@ -622,7 +622,7 @@ Resources:
 
       DefinitionString: |
         {
-          "Comment": "IATA Sales Bronze to Silver processing pipeline",
+          "Comment": "yt Sales Bronze to Silver processing pipeline",
           "StartAt": "Create Silver Run ID",
 
           "States": {
@@ -759,7 +759,7 @@ Resources:
 
                 "TopicArn": "${NotificationTopicArn}",
 
-                "Subject": "IATA Sales - Silver DQ Warning",
+                "Subject": "yt Sales - Silver DQ Warning",
 
                 "Message.$": "States.Format('Silver processing completed with quarantined records. Silver Run ID: {}. Bronze read: {}. Valid: {}. Quarantined: {}. Duplicates removed: {}. Silver processed: {}.', $.run.silver_run_id, $.summary.Item.bronze_records_read.N, $.summary.Item.valid_records.N, $.summary.Item.quarantine_records.N, $.summary.Item.duplicates_removed.N, $.summary.Item.silver_records_processed.N)"
               },
@@ -786,7 +786,7 @@ Resources:
 
                 "TopicArn": "${NotificationTopicArn}",
 
-                "Subject": "IATA Sales - Bronze to Silver FAILED",
+                "Subject": "yt Sales - Bronze to Silver FAILED",
 
                 "Message.$": "States.Format('Bronze to Silver pipeline failed. Silver Run ID: {}. Error: {}', $.run.silver_run_id, $.error.Cause)"
               },
@@ -813,7 +813,7 @@ Resources:
 
                 "TopicArn": "${NotificationTopicArn}",
 
-                "Subject": "IATA Sales - Silver Reconciliation FAILED",
+                "Subject": "yt Sales - Silver Reconciliation FAILED",
 
                 "Message.$": "States.Format('Bronze to Silver Glue processing completed, but the reconciliation summary could not be retrieved or was incomplete. Silver Run ID: {}.', $.run.silver_run_id)"
               },
@@ -840,7 +840,7 @@ Resources:
             "Bronze To Silver Pipeline Failed": {
               "Type": "Fail",
               "Error": "BronzeToSilverFailed",
-              "Cause": "IATA Sales Bronze to Silver technical processing failed"
+              "Cause": "yt Sales Bronze to Silver technical processing failed"
             }
           }
         }
@@ -870,7 +870,7 @@ Outputs:
 
   IngestionStateMachineArn:
 
-    Description: IATA Sales ingestion state machine ARN
+    Description: yt Sales ingestion state machine ARN
 
     Value:
       !Ref IngestionStateMachine
@@ -883,7 +883,7 @@ Outputs:
 
   IngestionStateMachineName:
 
-    Description: IATA Sales ingestion state machine name
+    Description: yt Sales ingestion state machine name
 
     Value:
       !GetAtt IngestionStateMachine.Name
@@ -900,7 +900,7 @@ Outputs:
 
   BronzeToSilverStateMachineArn:
 
-    Description: IATA Sales Bronze-to-Silver state machine ARN
+    Description: yt Sales Bronze-to-Silver state machine ARN
 
     Value:
       !Ref BronzeToSilverStateMachine
@@ -913,7 +913,7 @@ Outputs:
 
   BronzeToSilverStateMachineName:
 
-    Description: IATA Sales Bronze-to-Silver state machine name
+    Description: yt Sales Bronze-to-Silver state machine name
 
     Value:
       !GetAtt BronzeToSilverStateMachine.Name

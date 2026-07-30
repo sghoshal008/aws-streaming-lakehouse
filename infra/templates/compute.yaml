@@ -1,7 +1,7 @@
 AWSTemplateFormatVersion: '2010-09-09'
 
 Description: >
-  Compute layer for the IATA Sales IaC pipeline.
+  Compute layer for the yt Sales IaC pipeline.
   Creates the Acquisition Lambda, Glue MSK connection,
   Landing-to-MSK Glue job, Bronze-to-Silver Glue job,
   and associated CloudWatch log groups.
@@ -14,7 +14,7 @@ Parameters:
 
   ProjectName:
     Type: String
-    Default: iata-sales-iac
+    Default: yt-sales-iac
     Description: Common resource naming prefix.
 
 
@@ -24,17 +24,17 @@ Parameters:
 
   LandingBucketName:
     Type: String
-    Default: iata-sales-iac-landing-878670310452
+    Default: yt-sales-iac-landing-878670310452
     Description: Landing/archive/manifest bucket.
 
   LakehouseBucketName:
     Type: String
-    Default: iata-sales-iac-lakehouse-878670310452
+    Default: yt-sales-iac-lakehouse-878670310452
     Description: Bronze/Silver/Gold lakehouse bucket.
 
   ArtifactsBucketName:
     Type: String
-    Default: iata-sales-iac-artifacts-878670310452
+    Default: yt-sales-iac-artifacts-878670310452
     Description: Deployment artifacts, Glue scripts and JARs.
 
 
@@ -44,7 +44,7 @@ Parameters:
 
   IngestionControlTableName:
     Type: String
-    Default: iata-sales-iac-ingestion-control
+    Default: yt-sales-iac-ingestion-control
 
 
   # ----------------------------------------------------------
@@ -172,7 +172,7 @@ Resources:
         !Sub '${ProjectName}-acquisition'
 
       Description: >
-        Downloads the IATA Sales source ZIP, archives the source,
+        Downloads the yt Sales source ZIP, archives the source,
         extracts CSV files, writes landing objects and manifests,
         and records ingestion metadata in DynamoDB.
 
@@ -248,10 +248,10 @@ Resources:
   # Glue Kafka / MSK Connection
   #
   # Replacement for:
-  # iata-sales-msk-connection
+  # yt-sales-msk-connection
   #
   # New:
-  # iata-sales-iac-msk-connection
+  # yt-sales-iac-msk-connection
   # ==========================================================
 
   GlueMSKConnection:

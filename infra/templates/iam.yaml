@@ -2,36 +2,36 @@ AWSTemplateFormatVersion: '2010-09-09'
 
 Description: >
   IAM roles and execution policies for the
-  IATA Sales IaC data pipeline.
+  yt Sales IaC data pipeline.
 
 Parameters:
 
   ProjectName:
     Type: String
-    Default: iata-sales-iac
+    Default: yt-sales-iac
     Description: Common resource naming prefix.
 
   LandingBucketName:
     Type: String
-    Default: iata-sales-iac-landing-878670310452
+    Default: yt-sales-iac-landing-878670310452
 
   LakehouseBucketName:
     Type: String
-    Default: iata-sales-iac-lakehouse-878670310452
+    Default: yt-sales-iac-lakehouse-878670310452
 
   ArtifactsBucketName:
     Type: String
-    Default: iata-sales-iac-artifacts-878670310452
+    Default: yt-sales-iac-artifacts-878670310452
 
   # Retained because main.yaml currently passes this parameter.
   # It is not directly required by the execution roles below.
   PluginsBucketName:
     Type: String
-    Default: iata-sales-iac-plugins-878670310452
+    Default: yt-sales-iac-plugins-878670310452
 
   IngestionControlTableName:
     Type: String
-    Default: iata-sales-iac-ingestion-control
+    Default: yt-sales-iac-ingestion-control
 
 
 Resources:
@@ -830,9 +830,9 @@ Resources:
               # ALL TOPICS INSIDE THIS PROJECT MSK CLUSTER
               #
               # Required for:
-              # - iata-sales-iac-records
-              # - iata-sales-iac-errors
-              # - iata-sales-iac-control-iceberg
+              # - yt-sales-iac-records
+              # - yt-sales-iac-errors
+              # - yt-sales-iac-control-iceberg
               # - __amazon_msk_connect_* internal topics
               #
               # CreateTopic is included because MSK Connect

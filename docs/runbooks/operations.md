@@ -3,23 +3,23 @@
 ```bash
 export AWS_REGION="ap-southeast-1"
 export AWS_ACCOUNT_ID="878670310452"
-export CONTROL_TABLE="iata-sales-iac-ingestion-control"
+export CONTROL_TABLE="yt-sales-iac-ingestion-control"
 ```
 
 ## CloudFormation
 
 ```bash
-aws cloudformation describe-stacks --stack-name iata-sales-iac --region "$AWS_REGION"   --query "Stacks[0].[StackStatus,StackStatusReason]" --output table
+aws cloudformation describe-stacks --stack-name yt-sales-iac --region "$AWS_REGION"   --query "Stacks[0].[StackStatus,StackStatusReason]" --output table
 
-aws cloudformation describe-stacks --stack-name iata-sales-iac --region "$AWS_REGION"   --query "Stacks[0].Outputs" --output table
+aws cloudformation describe-stacks --stack-name yt-sales-iac --region "$AWS_REGION"   --query "Stacks[0].Outputs" --output table
 
-aws cloudformation describe-stack-resources --stack-name iata-sales-iac   --region "$AWS_REGION" --output table
+aws cloudformation describe-stack-resources --stack-name yt-sales-iac   --region "$AWS_REGION" --output table
 ```
 
 Failed creation events:
 
 ```bash
-aws cloudformation describe-stack-events --stack-name iata-sales-iac   --region "$AWS_REGION"   --query "StackEvents[?ResourceStatus=='CREATE_FAILED'].[Timestamp,LogicalResourceId,ResourceType,ResourceStatusReason]"   --output table
+aws cloudformation describe-stack-events --stack-name yt-sales-iac   --region "$AWS_REGION"   --query "StackEvents[?ResourceStatus=='CREATE_FAILED'].[Timestamp,LogicalResourceId,ResourceType,ResourceStatusReason]"   --output table
 ```
 
 ## Step Functions
@@ -35,7 +35,7 @@ aws stepfunctions get-execution-history --execution-arn <EXECUTION_ARN>   --regi
 
 
 INGESTION_ARN="$(aws cloudformation describe-stacks \
-  --stack-name iata-sales-iac \
+  --stack-name yt-sales-iac \
   --region "${AWS_REGION}" \
   --query "Stacks[0].Outputs[?OutputKey=='IngestionStateMachineArn'].OutputValue | [0]" \
   --output text)"
@@ -46,7 +46,7 @@ aws stepfunctions start-execution \
   --region "${AWS_REGION}"
 
 SILVER_ARN="$(aws cloudformation describe-stacks \
-  --stack-name iata-sales-iac \
+  --stack-name yt-sales-iac \
   --region "${AWS_REGION}" \
   --query "Stacks[0].Outputs[?OutputKey=='BronzeToSilverStateMachineArn'].OutputValue | [0]" \
   --output text)"
@@ -228,9 +228,9 @@ ORDER BY revenue DESC;
 ```bash
 aws glue get-jobs --region "$AWS_REGION" --query "Jobs[*].Name"
 
-aws glue get-job-runs --job-name iata-sales-iac-landing-to-msk   --region "$AWS_REGION" --max-results 10   --query "JobRuns[*].[Id,JobRunState,StartedOn,ExecutionTime,ErrorMessage]"   --output table
+aws glue get-job-runs --job-name yt-sales-iac-landing-to-msk   --region "$AWS_REGION" --max-results 10   --query "JobRuns[*].[Id,JobRunState,StartedOn,ExecutionTime,ErrorMessage]"   --output table
 
-aws glue get-job-runs --job-name iata-sales-iac-bronze-to-silver   --region "$AWS_REGION" --max-results 10   --query "JobRuns[*].[Id,JobRunState,StartedOn,ExecutionTime,ErrorMessage]"   --output table
+aws glue get-job-runs --job-name yt-sales-iac-bronze-to-silver   --region "$AWS_REGION" --max-results 10   --query "JobRuns[*].[Id,JobRunState,StartedOn,ExecutionTime,ErrorMessage]"   --output table
 ```
 
 Glue connections / VPC evidence:
@@ -262,18 +262,18 @@ aws kafkaconnect list-custom-plugins --region "$AWS_REGION"   --query "customPlu
 ## S3
 
 ```bash
-aws s3 ls "s3://iata-sales-iac-landing-${AWS_ACCOUNT_ID}/" --recursive
-aws s3 ls "s3://iata-sales-iac-lakehouse-${AWS_ACCOUNT_ID}/" --recursive
-aws s3 ls "s3://iata-sales-iac-artifacts-${AWS_ACCOUNT_ID}/glue/" --recursive
-aws s3 ls "s3://iata-sales-iac-plugins-${AWS_ACCOUNT_ID}/" --recursive
+aws s3 ls "s3://yt-sales-iac-landing-${AWS_ACCOUNT_ID}/" --recursive
+aws s3 ls "s3://yt-sales-iac-lakehouse-${AWS_ACCOUNT_ID}/" --recursive
+aws s3 ls "s3://yt-sales-iac-artifacts-${AWS_ACCOUNT_ID}/glue/" --recursive
+aws s3 ls "s3://yt-sales-iac-plugins-${AWS_ACCOUNT_ID}/" --recursive
 ```
 
 ## Lambda
 
 ```bash
-aws lambda get-function-configuration   --function-name iata-sales-iac-acquisition   --region "$AWS_REGION"
+aws lambda get-function-configuration   --function-name yt-sales-iac-acquisition   --region "$AWS_REGION"
 
-aws lambda get-function-configuration   --function-name iata-sales-iac-acquisition   --region "$AWS_REGION"   --query "VpcConfig"
+aws lambda get-function-configuration   --function-name yt-sales-iac-acquisition   --region "$AWS_REGION"   --query "VpcConfig"
 ```
 
 The current Acquisition Lambda is intentionally not attached to the application VPC.
@@ -281,7 +281,7 @@ The current Acquisition Lambda is intentionally not attached to the application 
 ## VPC / Networking
 
 ```bash
-aws ec2 describe-vpcs --region "$AWS_REGION"   --filters "Name=tag:Name,Values=iata-sales-iac-vpc"   --query "Vpcs[*].[VpcId,CidrBlock,State]" --output table
+aws ec2 describe-vpcs --region "$AWS_REGION"   --filters "Name=tag:Name,Values=yt-sales-iac-vpc"   --query "Vpcs[*].[VpcId,CidrBlock,State]" --output table
 
 aws ec2 describe-subnets --region "$AWS_REGION"   --filters "Name=vpc-id,Values=<VPC_ID>"   --query "Subnets[*].[SubnetId,AvailabilityZone,CidrBlock,MapPublicIpOnLaunch,Tags[?Key=='Name'].Value|[0]]"   --output table
 
@@ -299,13 +299,13 @@ aws ec2 describe-nat-gateways --region "$AWS_REGION"   --filter "Name=vpc-id,Val
 ## CloudWatch
 
 ```bash
-aws logs describe-log-groups --region "$AWS_REGION"   --log-group-name-prefix "/aws/"   --query "logGroups[?contains(logGroupName, 'iata-sales-iac')].logGroupName"
+aws logs describe-log-groups --region "$AWS_REGION"   --log-group-name-prefix "/aws/"   --query "logGroups[?contains(logGroupName, 'yt-sales-iac')].logGroupName"
 
 aws logs tail <LOG_GROUP_NAME> --region "$AWS_REGION" --since 30m
 
 aws logs filter-log-events --log-group-name "<LOG_GROUP_NAME>"   --region "$AWS_REGION" --filter-pattern '"ERROR"'
 
-aws cloudwatch list-dashboards --region "$AWS_REGION"   --dashboard-name-prefix iata-sales-iac
+aws cloudwatch list-dashboards --region "$AWS_REGION"   --dashboard-name-prefix yt-sales-iac
 ```
 
 ## SNS

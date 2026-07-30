@@ -2,7 +2,7 @@
 
 ## Purpose
 
-This plugin is used by Amazon MSK Connect to consume records from the IATA Sales Kafka topic and write them into the Bronze Apache Iceberg table stored in S3 and registered in the AWS Glue Data Catalog.
+This plugin is used by Amazon MSK Connect to consume records from the yt Sales Kafka topic and write them into the Bronze Apache Iceberg table stored in S3 and registered in the AWS Glue Data Catalog.
 
 Pipeline:
 
@@ -28,20 +28,20 @@ S3 + Glue Data Catalog
 
 - Plugin type: `Apache Iceberg Kafka Connect`
 - Connector class: `org.apache.iceberg.connect.IcebergSinkConnector`
-- MSK Connect custom plugin name: `iata-sales-iac-iceberg-sink-plugin`
+- MSK Connect custom plugin name: `yt-sales-iac-iceberg-sink-plugin`
 - Deployment type: `ZIP`
-- Artifact bucket: `iata-sales-iac-plugins-878670310452`
+- Artifact bucket: `yt-sales-iac-plugins-878670310452`
 
 Target S3 location:
 
 ```text
-s3://iata-sales-iac-plugins-878670310452/msk-connect/iceberg/
+s3://yt-sales-iac-plugins-878670310452/msk-connect/iceberg/
 ```
 
 Target plugin ZIP:
 
 ```text
-s3://iata-sales-iac-plugins-878670310452/msk-connect/iceberg/iata-sales-iac-iceberg-sink-plugin.zip
+s3://yt-sales-iac-plugins-878670310452/msk-connect/iceberg/yt-sales-iac-iceberg-sink-plugin.zip
 ```
 
 The plugin ZIP is uploaded to S3 and registered as an Amazon MSK Connect Custom Plugin.
@@ -82,7 +82,7 @@ aws-msk-iam-auth-2.3.7-all.jar
 These are Glue/Spark Kafka dependencies and should be stored under:
 
 ```text
-s3://iata-sales-iac-artifacts-878670310452/glue/jars/
+s3://yt-sales-iac-artifacts-878670310452/glue/jars/
 ```
 
 They are separate from the complete Apache Iceberg Kafka Connect plugin package used by MSK Connect.
@@ -94,25 +94,25 @@ They are separate from the complete Apache Iceberg Kafka Connect plugin package 
 Connector name:
 
 ```text
-iata-sales-iac-iceberg-sink
+yt-sales-iac-iceberg-sink
 ```
 
 Custom plugin:
 
 ```text
-iata-sales-iac-iceberg-sink-plugin
+yt-sales-iac-iceberg-sink-plugin
 ```
 
 IAM execution role:
 
 ```text
-iata-sales-iac-msk-connect-role
+yt-sales-iac-msk-connect-role
 ```
 
 Kafka cluster:
 
 ```text
-iata-sales-iac-msk
+yt-sales-iac-msk
 ```
 
 Tasks:
@@ -128,7 +128,7 @@ tasks.max=1
 Main topic:
 
 ```text
-iata-sales-iac-records
+yt-sales-iac-records
 ```
 
 The connector consumes records produced by the Landing → MSK Glue job.
@@ -152,7 +152,7 @@ tasks.max=1
 Source topic:
 
 ```properties
-topics=iata-sales-iac-records
+topics=yt-sales-iac-records
 ```
 
 ---
@@ -174,7 +174,7 @@ iceberg.catalog.io-impl=org.apache.iceberg.aws.s3.S3FileIO
 Warehouse:
 
 ```properties
-iceberg.catalog.warehouse=s3://iata-sales-iac-lakehouse-878670310452/bronze
+iceberg.catalog.warehouse=s3://yt-sales-iac-lakehouse-878670310452/bronze
 ```
 
 ---
@@ -230,13 +230,13 @@ The Bronze table is created before the connector starts by infra/scripts/bootstr
 Control topic:
 
 ```text
-iata-sales-iac-control-iceberg
+yt-sales-iac-control-iceberg
 ```
 
 Configuration:
 
 ```properties
-iceberg.control.topic=iata-sales-iac-control-iceberg
+iceberg.control.topic=yt-sales-iac-control-iceberg
 ```
 
 Commit interval:
@@ -262,19 +262,19 @@ connector.class=org.apache.iceberg.connect.IcebergSinkConnector
 
 tasks.max=1
 
-topics=iata-sales-iac-records
+topics=yt-sales-iac-records
 
 iceberg.catalog.catalog-impl=org.apache.iceberg.aws.glue.GlueCatalog
 iceberg.catalog.io-impl=org.apache.iceberg.aws.s3.S3FileIO
 
-iceberg.catalog.warehouse=s3://iata-sales-iac-lakehouse-878670310452/bronze
+iceberg.catalog.warehouse=s3://yt-sales-iac-lakehouse-878670310452/bronze
 
 iceberg.tables=iata_sales_iac_bronze.sales_raw
 
 iceberg.tables.auto-create-enabled=false
 iceberg.tables.evolve-schema-enabled=false
 
-iceberg.control.topic=iata-sales-iac-control-iceberg
+iceberg.control.topic=yt-sales-iac-control-iceberg
 iceberg.control.commit.interval-ms=10000
 ```
 
@@ -295,7 +295,7 @@ config/msk-connect/iceberg-sink.properties
 MSK Connect execution role:
 
 ```text
-iata-sales-iac-msk-connect-role
+yt-sales-iac-msk-connect-role
 ```
 
 The role requires access to:
@@ -303,7 +303,7 @@ The role requires access to:
 ```text
 Amazon MSK
     ↓
-Consume iata-sales-iac-records
+Consume yt-sales-iac-records
 
 AWS Glue Data Catalog
     ↓
@@ -311,7 +311,7 @@ Read/Create/Update Iceberg metadata
 
 Amazon S3
     ↓
-iata-sales-iac-lakehouse-878670310452
+yt-sales-iac-lakehouse-878670310452
 
 CloudWatch Logs
     ↓
@@ -336,13 +336,13 @@ Target resources:
 
 ```text
 MSK Cluster:
-iata-sales-iac-msk
+yt-sales-iac-msk
 
 MSK Connect Connector:
-iata-sales-iac-iceberg-sink
+yt-sales-iac-iceberg-sink
 
 Security Group:
-iata-sales-iac-msk-connect-sg
+yt-sales-iac-msk-connect-sg
 ```
 
 The connector should use the VPC/subnets associated with the MSK deployment.
@@ -356,7 +356,7 @@ MSK Connect worker logs should be enabled.
 Recommended log group:
 
 ```text
-/aws/msk-connect/iata-sales-iac-iceberg-sink
+/aws/msk-connect/yt-sales-iac-iceberg-sink
 ```
 
 These logs are used for:
@@ -396,10 +396,10 @@ Do not commit the large generated plugin ZIP.
 Store the deployable plugin ZIP:
 
 ```text
-s3://iata-sales-iac-plugins-878670310452/
+s3://yt-sales-iac-plugins-878670310452/
 └── msk-connect/
     └── iceberg/
-        └── iata-sales-iac-iceberg-sink-plugin.zip
+        └── yt-sales-iac-iceberg-sink-plugin.zip
 ```
 
 ---
@@ -410,16 +410,16 @@ The final CloudFormation implementation should create/manage:
 
 | Resource | Target Name |
 |---|---|
-| Plugin S3 Bucket | `iata-sales-iac-plugins-878670310452` |
-| Custom Plugin | `iata-sales-iac-iceberg-sink-plugin` |
-| MSK Connect Connector | `iata-sales-iac-iceberg-sink` |
-| MSK Connect IAM Role | `iata-sales-iac-msk-connect-role` |
-| MSK Cluster | `iata-sales-iac-msk` |
-| Kafka Source Topic | `iata-sales-iac-records` |
-| Iceberg Control Topic | `iata-sales-iac-control-iceberg` |
+| Plugin S3 Bucket | `yt-sales-iac-plugins-878670310452` |
+| Custom Plugin | `yt-sales-iac-iceberg-sink-plugin` |
+| MSK Connect Connector | `yt-sales-iac-iceberg-sink` |
+| MSK Connect IAM Role | `yt-sales-iac-msk-connect-role` |
+| MSK Cluster | `yt-sales-iac-msk` |
+| Kafka Source Topic | `yt-sales-iac-records` |
+| Iceberg Control Topic | `yt-sales-iac-control-iceberg` |
 | Glue Database | `iata_sales_iac_bronze` |
 | Iceberg Table | `sales_raw` |
-| Lakehouse Bucket | `iata-sales-iac-lakehouse-878670310452` |
+| Lakehouse Bucket | `yt-sales-iac-lakehouse-878670310452` |
 
 ---
 
@@ -432,19 +432,19 @@ Package complete plugin as ZIP
                  ↓
 Upload ZIP
                  ↓
-s3://iata-sales-iac-plugins-878670310452/
+s3://yt-sales-iac-plugins-878670310452/
         msk-connect/iceberg/
                  ↓
 Create MSK Connect Custom Plugin
                  ↓
-iata-sales-iac-iceberg-sink-plugin
+yt-sales-iac-iceberg-sink-plugin
                  ↓
 Create MSK Connect Connector
                  ↓
-iata-sales-iac-iceberg-sink
+yt-sales-iac-iceberg-sink
                  ↓
 Consume
-iata-sales-iac-records
+yt-sales-iac-records
                  ↓
 Write
 iata_sales_iac_bronze.sales_raw

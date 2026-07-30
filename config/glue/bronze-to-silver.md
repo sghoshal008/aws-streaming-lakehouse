@@ -4,7 +4,7 @@
 
 | Setting | Value |
 |---|---|
-| Job name | `iata-sales-iac-bronze-to-silver` |
+| Job name | `yt-sales-iac-bronze-to-silver` |
 | Job type | Spark |
 | Glue version | `5.1` |
 | Language | Python 3 |
@@ -14,7 +14,7 @@
 | Timeout | `10 minutes` |
 | Retries | `1` |
 | Max concurrent runs | `1` |
-| IAM role | `iata-sales-iac-glue-bronze-to-silver-role` |
+| IAM role | `yt-sales-iac-glue-bronze-to-silver-role` |
 | Glue connection | None |
 
 The job is not attached to the Kafka VPC connection because it reads/writes
@@ -23,7 +23,7 @@ S3-backed Iceberg tables through AWS services rather than connecting to MSK.
 ## Script
 
 ```text
-s3://iata-sales-iac-artifacts-<ACCOUNT_ID>/
+s3://yt-sales-iac-artifacts-<ACCOUNT_ID>/
 glue/scripts/iata_sales_bronze_to_silver.py
 ```
 
@@ -39,8 +39,8 @@ Static CloudFormation arguments:
 
 ```text
 --BRONZE_TABLE=glue_catalog.iata_sales_iac_bronze.sales_raw
---CONTROL_TABLE=iata-sales-iac-ingestion-control
---QUARANTINE_PATH=s3://iata-sales-iac-lakehouse-<ACCOUNT_ID>/quarantine/sales/
+--CONTROL_TABLE=yt-sales-iac-ingestion-control
+--QUARANTINE_PATH=s3://yt-sales-iac-lakehouse-<ACCOUNT_ID>/quarantine/sales/
 --SILVER_TABLE=glue_catalog.iata_sales_iac_silver.sales
 --datalake-formats=iceberg
 ```
@@ -75,7 +75,7 @@ spark.sql.catalog.glue_catalog=
   org.apache.iceberg.spark.SparkCatalog
 
 spark.sql.catalog.glue_catalog.warehouse=
-  s3://iata-sales-iac-lakehouse-<ACCOUNT_ID>/
+  s3://yt-sales-iac-lakehouse-<ACCOUNT_ID>/
 
 spark.sql.catalog.glue_catalog.catalog-impl=
   org.apache.iceberg.aws.glue.GlueCatalog
@@ -128,7 +128,7 @@ invalid total_profit        -> TOTAL_PROFIT_INVALID
 Rows with one or more DQ errors are written to:
 
 ```text
-s3://iata-sales-iac-lakehouse-<ACCOUNT_ID>/
+s3://yt-sales-iac-lakehouse-<ACCOUNT_ID>/
 quarantine/sales/snapshot_id=<BRONZE_SNAPSHOT_ID>/
 ```
 
@@ -217,8 +217,8 @@ when quarantine records are present.
 CloudWatch log groups:
 
 ```text
-/aws/glue/iata-sales-iac-bronze-to-silver/error
-/aws/glue/iata-sales-iac-bronze-to-silver/output
+/aws/glue/yt-sales-iac-bronze-to-silver/error
+/aws/glue/yt-sales-iac-bronze-to-silver/output
 ```
 
 Glue metrics and observability metrics are enabled.

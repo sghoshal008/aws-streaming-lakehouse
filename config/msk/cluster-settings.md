@@ -14,7 +14,7 @@ This document is a readable reference.
 
 | Setting | Value |
 |---|---|
-| Cluster name | `iata-sales-iac-msk` |
+| Cluster name | `yt-sales-iac-msk` |
 | Cluster type | Provisioned |
 | Apache Kafka version | `3.6.0` |
 | Metadata mode | ZooKeeper |
@@ -43,7 +43,7 @@ PrivateSubnet2 (ap-southeast-1b)
 It uses:
 
 ```text
-iata-sales-iac-msk-sg
+yt-sales-iac-msk-sg
 ```
 
 Public access is not enabled.
@@ -84,7 +84,7 @@ uses the AWS-managed MSK encryption configuration.
 CloudWatch broker logging is enabled:
 
 ```text
-/aws/msk/iata-sales-iac-broker
+/aws/msk/yt-sales-iac-broker
 ```
 
 S3 and Firehose broker log delivery are disabled.
@@ -107,9 +107,9 @@ They are not committed or hardcoded in the repository.
 
 | Topic | Partitions | Replication factor | Purpose |
 |---|---:|---:|---|
-| `iata-sales-iac-records` | 6 | 2 | Main sales record stream |
-| `iata-sales-iac-errors` | 3 | 2 | Connector/DLQ errors |
-| `iata-sales-iac-control-iceberg` | 1 | 2 | Iceberg connector control |
+| `yt-sales-iac-records` | 6 | 2 | Main sales record stream |
+| `yt-sales-iac-errors` | 3 | 2 | Connector/DLQ errors |
+| `yt-sales-iac-control-iceberg` | 1 | 2 | Iceberg connector control |
 
 Topics are managed by CloudFormation as `AWS::MSK::Topic` resources.
 

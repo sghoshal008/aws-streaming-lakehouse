@@ -40,7 +40,7 @@ The implementation intentionally treats **file acquisition as batch** and **reco
 
 ## 2. Architecture
 
-![IATA Sales Streaming Lakehouse Architecture](images/architecture.png)
+![Sales Streaming Lakehouse Architecture](images/architecture2.png)
 
 > `EventBridge` is shown in the architecture as the intended production scheduler. It is **not deployed in the demo stack**. For the case-study demonstration, the ingestion Step Function is started manually so each execution is deliberate and easy to observe.
 
@@ -62,7 +62,7 @@ Ingestion Step Function
 Glue Spark: Landing -> MSK
     |
     v
-Amazon MSK: iata-sales-iac-records
+Amazon MSK: yt-sales-iac-records
     |
     v
 MSK Connect + Apache Iceberg custom plugin
@@ -212,7 +212,7 @@ Technical failures fail the state machine. Business data-quality exceptions are 
 Table:
 
 ```text
-iata-sales-iac-ingestion-control
+yt-sales-iac-ingestion-control
 ```
 
 Key design:
@@ -262,8 +262,8 @@ Example JSON:
   "status": "COMPLETED",
   "stage": "MSK_PUBLISHED",
   "file_count": 1,
-  "archive_s3_uri": "s3://iata-sales-iac-landing-<ACCOUNT_ID>/archive/...",
-  "manifest_s3_uri": "s3://iata-sales-iac-landing-<ACCOUNT_ID>/manifests/.../manifest.json"
+  "archive_s3_uri": "s3://yt-sales-iac-landing-<ACCOUNT_ID>/archive/...",
+  "manifest_s3_uri": "s3://yt-sales-iac-landing-<ACCOUNT_ID>/manifests/.../manifest.json"
 }
 ```
 
@@ -314,7 +314,7 @@ Each Bronze-to-Silver Step Function execution generates a UUID and Glue writes a
 ### Landing bucket
 
 ```text
-s3://iata-sales-iac-landing-<ACCOUNT_ID>/
+s3://yt-sales-iac-landing-<ACCOUNT_ID>/
 ├── archive/
 │   └── source=sales/ingestion_date=YYYY-MM-DD/run_id=<run-id>/
 │       └── 2m-Sales-Records.zip
@@ -331,7 +331,7 @@ The manifest is written last and represents a complete acquisition run.
 ### Lakehouse bucket
 
 ```text
-s3://iata-sales-iac-lakehouse-<ACCOUNT_ID>/
+s3://yt-sales-iac-lakehouse-<ACCOUNT_ID>/
 ├── bronze/
 │   └── sales_raw/
 │       ├── data/
@@ -352,9 +352,9 @@ Main topics:
 
 | Topic | Purpose |
 |---|---|
-| `iata-sales-iac-records` | Valid sales events produced by Glue |
-| `iata-sales-iac-errors` | Connector DLQ / error records |
-| `iata-sales-iac-control-iceberg` | Iceberg sink coordination/commit control |
+| `yt-sales-iac-records` | Valid sales events produced by Glue |
+| `yt-sales-iac-errors` | Connector DLQ / error records |
+| `yt-sales-iac-control-iceberg` | Iceberg sink coordination/commit control |
 
 The MSK cluster uses IAM authentication and TLS. The producer sends JSON records and keys records by the configured business key so Kafka partitioning is deterministic for the same key.
 
@@ -381,7 +381,7 @@ Core configuration:
 ```properties
 connector.class=org.apache.iceberg.connect.IcebergSinkConnector
 tasks.max=2
-topics=iata-sales-iac-records
+topics=yt-sales-iac-records
 
 iceberg.tables=iata_sales_iac_bronze.sales_raw
 iceberg.tables.auto-create-enabled=false
@@ -389,9 +389,9 @@ iceberg.tables.evolve-schema-enabled=false
 
 iceberg.catalog.catalog-impl=org.apache.iceberg.aws.glue.GlueCatalog
 iceberg.catalog.io-impl=org.apache.iceberg.aws.s3.S3FileIO
-iceberg.catalog.warehouse=s3://iata-sales-iac-lakehouse-<ACCOUNT_ID>/bronze
+iceberg.catalog.warehouse=s3://yt-sales-iac-lakehouse-<ACCOUNT_ID>/bronze
 
-iceberg.control.topic=iata-sales-iac-control-iceberg
+iceberg.control.topic=yt-sales-iac-control-iceberg
 iceberg.control.commit.interval-ms=10000
 
 key.converter=org.apache.kafka.connect.storage.StringConverter
@@ -399,7 +399,7 @@ value.converter=org.apache.kafka.connect.json.JsonConverter
 value.converter.schemas.enable=false
 
 errors.tolerance=all
-errors.deadletterqueue.topic.name=iata-sales-iac-errors
+errors.deadletterqueue.topic.name=yt-sales-iac-errors
 ```
 
 The connector uses:
@@ -601,7 +601,7 @@ pip install cfn-lint
 ```bash
 export AWS_ACCOUNT_ID="<YOUR_AWS_ACCOUNT_ID>"
 export AWS_REGION="ap-southeast-1"
-export PROJECT_NAME="iata-sales-iac"
+export PROJECT_NAME="yt-sales-iac"
 export ALERT_EMAIL="<YOUR_EMAIL>"
 ```
 
@@ -698,7 +698,7 @@ Obtain the state machine ARN:
 
 ```bash
 INGESTION_ARN="$(aws cloudformation describe-stacks \
-  --stack-name iata-sales-iac \
+  --stack-name yt-sales-iac \
   --region "${AWS_REGION}" \
   --query "Stacks[0].Outputs[?OutputKey=='IngestionStateMachineArn'].OutputValue | [0]" \
   --output text)"
@@ -719,7 +719,7 @@ Expected flow:
 Lambda acquisition
 -> S3 archive/landing/manifest
 -> Glue Landing-to-MSK
--> iata-sales-iac-records
+-> yt-sales-iac-records
 -> DynamoDB status MSK_PUBLISHED
 ```
 
@@ -734,7 +734,7 @@ FROM iata_sales_iac_bronze.sales_raw;
 
 ```bash
 SILVER_ARN="$(aws cloudformation describe-stacks \
-  --stack-name iata-sales-iac \
+  --stack-name yt-sales-iac \
   --region "${AWS_REGION}" \
   --query "Stacks[0].Outputs[?OutputKey=='BronzeToSilverStateMachineArn'].OutputValue | [0]" \
   --output text)"
@@ -776,15 +776,15 @@ CloudWatch provides Lambda, Glue, Step Functions, MSK and MSK Connect logs/metri
 Important log groups include:
 
 ```text
-/aws/lambda/iata-sales-iac-acquisition
-/aws/glue/iata-sales-iac-landing-to-msk/error
-/aws/glue/iata-sales-iac-landing-to-msk/output
-/aws/glue/iata-sales-iac-bronze-to-silver/error
-/aws/glue/iata-sales-iac-bronze-to-silver/output
-/aws/msk/iata-sales-iac-broker
-/aws/msk-connect/iata-sales-iac-iceberg-sink
-/aws/vendedlogs/states/iata-sales-iac-ingestion-pipeline-Logs
-/aws/vendedlogs/states/iata-sales-iac-bronze-to-silver-pipeline-Logs
+/aws/lambda/yt-sales-iac-acquisition
+/aws/glue/yt-sales-iac-landing-to-msk/error
+/aws/glue/yt-sales-iac-landing-to-msk/output
+/aws/glue/yt-sales-iac-bronze-to-silver/error
+/aws/glue/yt-sales-iac-bronze-to-silver/output
+/aws/msk/yt-sales-iac-broker
+/aws/msk-connect/yt-sales-iac-iceberg-sink
+/aws/vendedlogs/states/yt-sales-iac-ingestion-pipeline-Logs
+/aws/vendedlogs/states/yt-sales-iac-bronze-to-silver-pipeline-Logs
 ```
 
 SNS is used for:

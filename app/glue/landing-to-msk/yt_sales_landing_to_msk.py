@@ -184,7 +184,7 @@ def send_summary(
         return
 
     lines = [
-        "IATA Sales Ingestion Summary",
+        "yt Sales Ingestion Summary",
         f"Run ID: {run_id}",
         f"Glue Run ID: {glue_run_id}",
         f"Files received: {len(valid_files) + len(invalid_files)}",
@@ -202,7 +202,7 @@ def send_summary(
     try:
         sns.publish(
             TopicArn=sns_topic_arn,
-            Subject=f"IATA ingestion summary - {run_id}"[:100],
+            Subject=f"yt ingestion summary - {run_id}"[:100],
             Message="\n".join(lines),
         )
     except Exception as error:

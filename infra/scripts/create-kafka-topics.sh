@@ -26,8 +26,8 @@ create_topic() {
     --replication-factor "$replication"
 }
 
-create_topic "iata-sales-iac-records" 6 2
-create_topic "iata-sales-iac-errors" 3 2
-create_topic "iata-sales-iac-control-iceberg" 1 2
+create_topic "yt-sales-iac-records" 6 2
+create_topic "yt-sales-iac-errors" 3 2
+create_topic "yt-sales-iac-control-iceberg" 1 2
 
 echo "Kafka topic creation completed."

@@ -3,9 +3,9 @@ set -euo pipefail
 
 AWS_REGION="${AWS_REGION:-ap-southeast-1}"
 AWS_ACCOUNT_ID="${AWS_ACCOUNT_ID:-878670310452}"
-PROJECT_NAME="${PROJECT_NAME:-iata-sales-iac}"
+PROJECT_NAME="${PROJECT_NAME:-yt-sales-iac}"
 
-BOOTSTRAP_BUCKET="${BOOTSTRAP_BUCKET:-iata-sales-iac-bootstrap-${AWS_ACCOUNT_ID}}"
+BOOTSTRAP_BUCKET="${BOOTSTRAP_BUCKET:-yt-sales-iac-bootstrap-${AWS_ACCOUNT_ID}}"
 TEMPLATE_PREFIX="${TEMPLATE_PREFIX:-${PROJECT_NAME}/cloudformation}"
 ARTIFACTS_BUCKET="${ARTIFACTS_BUCKET:-${PROJECT_NAME}-artifacts-${AWS_ACCOUNT_ID}}"
 PLUGINS_BUCKET="${PLUGINS_BUCKET:-${PROJECT_NAME}-plugins-${AWS_ACCOUNT_ID}}"
@@ -27,7 +27,7 @@ BRONZE_TO_SILVER_SCRIPT="${REPO_ROOT}/app/glue/bronze-to-silver/iata_sales_bronz
 JAR_DIR="${REPO_ROOT}/dependencies/glue/kafka"
 
 PLUGIN_ZIP_PATH="${PLUGIN_ZIP_PATH:-${REPO_ROOT}/dependencies/msk-connect/iceberg/iceberg-kafka-connect-runtime-1.11.0-SNAPSHOT.zip}"
-PLUGIN_S3_KEY="msk-connect/iceberg/iata-sales-iac-iceberg-sink-plugin.zip"
+PLUGIN_S3_KEY="msk-connect/iceberg/yt-sales-iac-iceberg-sink-plugin.zip"
 
 log() {
   printf '\n============================================================\n%s\n============================================================\n' "$1"

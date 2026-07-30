@@ -30,7 +30,7 @@
                               ▼
                    ┌─────────────────────┐
                    │     Amazon MSK      │
-                   │ iata-sales-records  │
+                   │ yt-sales-records  │
                    └──────────┬──────────┘
                               │
                               ▼

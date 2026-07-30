@@ -1,7 +1,7 @@
 AWSTemplateFormatVersion: '2010-09-09'
 
 Description: >
-  Storage layer for the IATA Sales IaC pipeline.
+  Storage layer for the yt Sales IaC pipeline.
   Creates S3 buckets for landing, lakehouse, deployment artifacts and MSK Connect plugins,
   a DynamoDB ingestion control table, and Glue Data Catalog databases for Bronze,
   Silver and Quarantine processing.
@@ -10,7 +10,7 @@ Parameters:
 
   ProjectName:
     Type: String
-    Default: iata-sales-iac
+    Default: yt-sales-iac
     Description: Resource naming prefix.
 
   AccountId:
@@ -217,7 +217,7 @@ Resources:
       CatalogId: !Ref AWS::AccountId
       DatabaseInput:
         Name: iata_sales_iac_bronze
-        Description: Bronze Iceberg database for raw IATA sales records
+        Description: Bronze Iceberg database for raw yt sales records
         LocationUri: !Sub 's3://${LakehouseBucket}/bronze/' 
 
 
@@ -231,7 +231,7 @@ Resources:
       CatalogId: !Ref AWS::AccountId
       DatabaseInput:
         Name: iata_sales_iac_silver
-        Description: Silver Iceberg database for validated IATA sales records
+        Description: Silver Iceberg database for validated yt sales records
         LocationUri: !Sub 's3://${LakehouseBucket}/silver/' 
 
 

@@ -1,5 +1,5 @@
 # Recommended AWS resource name:
-# iata-sales-iac-acquisition
+# yt-sales-iac-acquisition
 
 import boto3
 import hashlib

@@ -69,8 +69,8 @@ FULL DEPLOYMENT FLOW
 │   │
 │   └── Upload nested CloudFormation templates
 │         └── S3 bootstrap bucket:
-│             s3://iata-sales-iac-bootstrap-<ACCOUNT_ID>/
-│                 iata-sales-iac/cloudformation/
+│             s3://yt-sales-iac-bootstrap-<ACCOUNT_ID>/
+│                 yt-sales-iac/cloudformation/
 │
 │   NOTE:
 │     On a fresh deployment, Package #1 stops after uploading the
@@ -126,16 +126,16 @@ FULL DEPLOYMENT FLOW
 │   │       infra/templates/storage.yaml
 │   │
 │   │     ├── Landing S3 bucket
-│   │     │     iata-sales-iac-landing-<ACCOUNT_ID>
+│   │     │     yt-sales-iac-landing-<ACCOUNT_ID>
 │   │     │
 │   │     ├── Lakehouse S3 bucket
-│   │     │     iata-sales-iac-lakehouse-<ACCOUNT_ID>
+│   │     │     yt-sales-iac-lakehouse-<ACCOUNT_ID>
 │   │     │
 │   │     ├── Artifacts S3 bucket
-│   │     │     iata-sales-iac-artifacts-<ACCOUNT_ID>
+│   │     │     yt-sales-iac-artifacts-<ACCOUNT_ID>
 │   │     │
 │   │     ├── Plugins S3 bucket
-│   │     │     iata-sales-iac-plugins-<ACCOUNT_ID>
+│   │     │     yt-sales-iac-plugins-<ACCOUNT_ID>
 │   │     │
 │   │     ├── DynamoDB ingestion-control table
 │   │     │
@@ -166,16 +166,16 @@ FULL DEPLOYMENT FLOW
 │         ├── Optional email subscription
 │         ├── MSK broker CloudWatch log group
 │         ├── Amazon MSK cluster
-│         │     iata-sales-iac-msk
+│         │     yt-sales-iac-msk
 │         │
 │         ├── Kafka topic
-│         │     iata-sales-iac-records
+│         │     yt-sales-iac-records
 │         │
 │         ├── Kafka error topic
-│         │     iata-sales-iac-errors
+│         │     yt-sales-iac-errors
 │         │
 │         ├── Iceberg control topic
-│         │     iata-sales-iac-control-iceberg
+│         │     yt-sales-iac-control-iceberg
 │         │
 │         ├── Glue Schema Registry
 │         ├── Glue Schema
@@ -214,7 +214,7 @@ FULL DEPLOYMENT FLOW
 │   │       build/iata_sales_acquisition.zip
 │   │
 │   │     Upload:
-│   │       s3://iata-sales-iac-artifacts-<ACCOUNT_ID>/
+│   │       s3://yt-sales-iac-artifacts-<ACCOUNT_ID>/
 │   │           lambda/iata_sales_acquisition.zip
 │   │
 │   ├── Upload Landing → MSK Glue script
@@ -223,7 +223,7 @@ FULL DEPLOYMENT FLOW
 │   │           iata_sales_landing_to_msk.py
 │   │
 │   │     Upload:
-│   │       s3://iata-sales-iac-artifacts-<ACCOUNT_ID>/
+│   │       s3://yt-sales-iac-artifacts-<ACCOUNT_ID>/
 │   │           glue/scripts/iata_sales_landing_to_msk.py
 │   │
 │   ├── Upload Bronze → Silver Glue script
@@ -232,7 +232,7 @@ FULL DEPLOYMENT FLOW
 │   │           iata_sales_bronze_to_silver.py
 │   │
 │   │     Upload:
-│   │       s3://iata-sales-iac-artifacts-<ACCOUNT_ID>/
+│   │       s3://yt-sales-iac-artifacts-<ACCOUNT_ID>/
 │   │           glue/scripts/iata_sales_bronze_to_silver.py
 │   │
 │   ├── Upload Glue Kafka JARs
@@ -244,7 +244,7 @@ FULL DEPLOYMENT FLOW
 │   │     └── aws-msk-iam-auth-2.3.7-all.jar
 │   │
 │   │     Upload:
-│   │       s3://iata-sales-iac-artifacts-<ACCOUNT_ID>/glue/jars/
+│   │       s3://yt-sales-iac-artifacts-<ACCOUNT_ID>/glue/jars/
 │   │
 │   ├── Upload Iceberg SQL / DDL
 │   │     Local:
@@ -256,7 +256,7 @@ FULL DEPLOYMENT FLOW
 │   │     └── 004-set-silver-data-path.sql
 │   │
 │   │     Upload:
-│   │       s3://iata-sales-iac-artifacts-<ACCOUNT_ID>/sql/iceberg/
+│   │       s3://yt-sales-iac-artifacts-<ACCOUNT_ID>/sql/iceberg/
 │   │
 │   └── Upload MSK Connect Iceberg Plugin ZIP
 │         Local:
@@ -264,9 +264,9 @@ FULL DEPLOYMENT FLOW
 │               iceberg-kafka-connect-runtime-1.11.0-SNAPSHOT.zip
 │
 │         Upload:
-│           s3://iata-sales-iac-plugins-<ACCOUNT_ID>/
+│           s3://yt-sales-iac-plugins-<ACCOUNT_ID>/
 │               msk-connect/iceberg/
-│               iata-sales-iac-iceberg-sink-plugin.zip
+│               yt-sales-iac-iceberg-sink-plugin.zip
 │
 │
 ├── STEP 4 — DEPLOY PHASE 2
@@ -327,10 +327,10 @@ FULL DEPLOYMENT FLOW
 │   │       infra/templates/messaging.yaml
 │   │
 │   │     ├── AWS::KafkaConnect::CustomPlugin
-│   │     │     iata-sales-iac-iceberg-sink-plugin
+│   │     │     yt-sales-iac-iceberg-sink-plugin
 │   │     │
 │   │     └── AWS::KafkaConnect::Connector
-│   │           iata-sales-iac-iceberg-sink
+│   │           yt-sales-iac-iceberg-sink
 │   │
 │   │           Flow:
 │   │             MSK records topic
@@ -349,7 +349,7 @@ FULL DEPLOYMENT FLOW
 │   │     │       app/acquisition/iata_sales_acquisition.py
 │   │     │
 │   │     ├── Glue MSK network connection
-│   │     │     iata-sales-iac-msk-connection
+│   │     │     yt-sales-iac-msk-connection
 │   │     │
 │   │     ├── Landing → MSK Glue log groups
 │   │     ├── Landing → MSK Glue job
@@ -362,7 +362,7 @@ FULL DEPLOYMENT FLOW
 │   │     │         ↓
 │   │     │       transform rows to Kafka messages
 │   │     │         ↓
-│   │     │       publish to iata-sales-iac-records
+│   │     │       publish to yt-sales-iac-records
 │   │     │
 │   │     ├── Bronze → Silver Glue log groups
 │   │     └── Bronze → Silver Glue job
@@ -444,7 +444,7 @@ FULL DEPLOYMENT FLOW
       ├── reads source rows
       ├── creates Kafka records
       └── publishes to:
-            iata-sales-iac-records
+            yt-sales-iac-records
       │
       ▼
     Amazon MSK

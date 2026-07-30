@@ -3,7 +3,7 @@
 set -euo pipefail
 
 # ============================================================
-# IATA Sales IaC - Full Deployment Wrapper
+# yt Sales IaC - Full Deployment Wrapper
 #
 # Usage:
 #
@@ -14,8 +14,8 @@ set -euo pipefail
 #
 #   AWS_REGION=ap-southeast-1
 #   AWS_ACCOUNT_ID=878670310452
-#   PROJECT_NAME=iata-sales-iac
-#   STACK_NAME=iata-sales-iac
+#   PROJECT_NAME=yt-sales-iac
+#   STACK_NAME=yt-sales-iac
 #
 # ============================================================
 
@@ -27,10 +27,10 @@ set -euo pipefail
 AWS_REGION="${AWS_REGION:-ap-southeast-1}"
 AWS_ACCOUNT_ID="${AWS_ACCOUNT_ID:-878670310452}"
 
-PROJECT_NAME="${PROJECT_NAME:-iata-sales-iac}"
-STACK_NAME="${STACK_NAME:-iata-sales-iac}"
+PROJECT_NAME="${PROJECT_NAME:-yt-sales-iac}"
+STACK_NAME="${STACK_NAME:-yt-sales-iac}"
 
-BOOTSTRAP_BUCKET="${BOOTSTRAP_BUCKET:-iata-sales-iac-bootstrap-${AWS_ACCOUNT_ID}}"
+BOOTSTRAP_BUCKET="${BOOTSTRAP_BUCKET:-yt-sales-iac-bootstrap-${AWS_ACCOUNT_ID}}"
 ARTIFACTS_BUCKET="${ARTIFACTS_BUCKET:-${PROJECT_NAME}-artifacts-${AWS_ACCOUNT_ID}}"
 PLUGINS_BUCKET="${PLUGINS_BUCKET:-${PROJECT_NAME}-plugins-${AWS_ACCOUNT_ID}}"
 
@@ -486,7 +486,7 @@ fi
 
 create_environment() {
 
-    log "IATA Sales IaC - Full Deployment"
+    log "yt Sales IaC - Full Deployment"
 
     echo "Action:             CREATE"
     echo "Region:             ${AWS_REGION}"
@@ -738,7 +738,7 @@ create_environment() {
 
     log "Deployment Complete"
 
-    echo "IATA Sales IaC deployment completed successfully."
+    echo "yt Sales IaC deployment completed successfully."
     echo
     echo "Stack:"
     echo "  ${STACK_NAME}"
@@ -764,7 +764,7 @@ create_environment() {
 
 delete_environment() {
 
-    log "IATA Sales IaC - Full Teardown"
+    log "yt Sales IaC - Full Teardown"
 
     echo "Action:             DELETE"
     echo "Region:             ${AWS_REGION}"
@@ -901,7 +901,7 @@ delete_environment() {
 
     log "Teardown Complete"
 
-    echo "IATA Sales IaC environment has been removed."
+    echo "yt Sales IaC environment has been removed."
     echo
     echo "Stack:"
     echo "  ${STACK_NAME}"

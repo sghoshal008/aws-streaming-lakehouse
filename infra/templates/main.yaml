@@ -1,7 +1,7 @@
 AWSTemplateFormatVersion: '2010-09-09'
 
 Description: >
-  Parent CloudFormation stack for the IATA Sales IaC platform.
+  Parent CloudFormation stack for the yt Sales IaC platform.
   Orchestrates network, storage, IAM, messaging, compute,
   Step Functions orchestration and monitoring nested stacks.
 
@@ -13,7 +13,7 @@ Parameters:
 
   ProjectName:
     Type: String
-    Default: iata-sales-iac
+    Default: yt-sales-iac
     Description: Common resource naming prefix.
 
 
@@ -39,7 +39,7 @@ Parameters:
 
   TemplatePrefix:
     Type: String
-    Default: iata-sales-iac/cloudformation
+    Default: yt-sales-iac/cloudformation
     Description: Prefix containing nested CloudFormation templates.
 
 
@@ -78,7 +78,7 @@ Parameters:
 
   IcebergPluginFileKey:
     Type: String
-    Default: msk-connect/iceberg/iata-sales-iac-iceberg-sink-plugin.zip
+    Default: msk-connect/iceberg/yt-sales-iac-iceberg-sink-plugin.zip
     Description: Object key of the Iceberg connector plugin ZIP.
 
 
@@ -644,7 +644,7 @@ Outputs:
   # ==========================================================
 
   VpcId:
-    Description: IATA Sales IaC VPC
+    Description: yt Sales IaC VPC
     Value:
       !GetAtt NetworkStack.Outputs.VpcId
 

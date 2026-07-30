@@ -1,4 +1,4 @@
-CREATE TABLE IF NOT EXISTS iata_sales_iac_bronze.sales_raw (
+CREATE TABLE IF NOT EXISTS yt_sales_iac_bronze.sales_raw (
   region string,
   country string,
   item_type string,
