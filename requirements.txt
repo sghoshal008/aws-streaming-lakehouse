@@ -10,3 +10,6 @@ mcp>=1.12,<2
 boto3>=1.39,<2
 pytest>=8.4,<9
 pytest-cov>=6.2,<8
+
+# Local infrastructure validation
+cfn-lint>=1.39,<2

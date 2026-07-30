@@ -14,19 +14,117 @@ The source is a large external ZIP containing approximately two million sales re
 6. expose Bronze and Silver through Amazon Athena;
 7. provide reproducible Infrastructure as Code, monitoring, failure handling and an operational control trail.
 
-## Engineering Copilot
+## Optional AI-Assisted Engineering Copilot
 
-The repository includes an optional AI-assisted engineering application built with:
+The repository also includes an optional local Engineering Copilot that can review Glue/Spark code,
+explain the repository architecture, propose lightweight `pytest` tests, and run approved tests.
+It is separate from the AWS data pipeline and is not required for infrastructure deployment.
 
-- OpenAI tool calling
-- LangChain ReAct-style agent
-- FastAPI
-- FastMCP
-- Streamlit
-- pytest
-- optional read-only AWS inspection
+### Copilot architecture
 
-See [Engineering Copilot documentation](docs/engineering-copilot.md).
+```text
+Streamlit UI -> FastAPI -> OpenAI ReAct agent -> repository/test tools
+                                  |
+                                  `-> optional read-only AWS inspection
+
+FastMCP exposes the same engineering tool layer at http://localhost:8000/mcp.
+```
+
+The generated tests are repository-contract tests: they validate Python syntax, expected functions,
+important Spark operations, and the Glue/Spark runtime boundary without starting Spark. This keeps the
+demo lightweight and avoids requiring Java or PySpark locally.
+
+### Install
+
+From the repository root:
+
+```bash
+python3 -m venv .venv
+source .venv/bin/activate
+python -m pip install --upgrade pip
+python -m pip install -r requirements.txt
+```
+
+Create the local environment file:
+
+```bash
+cp .env.agent.example .env.agent
+```
+
+Edit `.env.agent` and provide your own OpenAI API key:
+
+```text
+AGENT_ENABLE_LLM=true
+OPENAI_API_KEY=<YOUR_OPENAI_API_KEY>
+OPENAI_MODEL=gpt-4.1-mini
+```
+
+Load the environment variables in each terminal used to run the Copilot:
+
+```bash
+set -a
+source .env.agent
+set +a
+```
+
+> `.env.agent` is ignored by Git. Never commit API keys or AWS credentials.
+
+### Run
+
+Start the FastAPI backend in the first terminal:
+
+```bash
+uvicorn app.engineering_agent.api.main:app --reload --port 8000
+```
+
+Start the Streamlit UI in a second terminal:
+
+```bash
+streamlit run app/engineering_agent/ui/streamlit_app.py --server.port 8501
+```
+
+Open:
+
+```text
+http://localhost:8501
+```
+
+Useful endpoints:
+
+```text
+FastAPI health check: http://localhost:8000/health
+FastAPI documentation: http://localhost:8000/docs
+MCP endpoint:          http://localhost:8000/mcp
+```
+
+### Test
+
+Run the Copilot's own unit tests:
+
+```bash
+python -m pytest tests/engineering_agent -q
+```
+
+Tests proposed by the Copilot are shown in the UI and require explicit human approval before they
+are written under `generated_tests/`. Run approved generated tests with:
+
+```bash
+python -m pytest generated_tests -q
+```
+
+### Optional read-only AWS inspection
+
+AWS inspection is disabled by default. To enable it, configure a read-only AWS profile in
+`.env.agent`:
+
+```text
+AGENT_ENABLE_AWS=true
+AWS_PROFILE=<YOUR_READ_ONLY_AWS_PROFILE>
+AWS_REGION=ap-southeast-1
+```
+
+More details and example prompts are available in
+[Engineering Copilot documentation](docs/engineering-copilot-react.md).
 
 Source dataset:
 
@@ -593,7 +691,7 @@ python3 -m venv .venv
 source .venv/bin/activate
 
 python -m pip install --upgrade pip
-pip install cfn-lint
+python -m pip install -r requirements.txt
 ```
 
 ### 11.3 Configure environment
@@ -927,8 +1025,13 @@ verifies key project resources are gone
 .
 ├── app/
 │   ├── acquisition/
-│   │   ├── yt_sales_acquisition.py
-│   │   └── requirements.txt
+│   │   └── yt_sales_acquisition.py
+│   ├── engineering_agent/
+│   │   ├── agent/
+│   │   ├── api/
+│   │   ├── mcp/
+│   │   ├── services/
+│   │   └── ui/
 │   └── glue/
 │       ├── landing-to-msk/
 │       │   └── yt_sales_landing_to_msk.py
@@ -979,7 +1082,12 @@ verifies key project resources are gone
 │       ├── orchestration.yaml
 │       └── monitoring.yaml
 │
+├── generated_tests/
+├── tests/engineering_agent/
+├── .env.agent.example
 ├── Makefile
+├── Makefile.agent
+├── requirements.txt
 └── README.md
 ```
 
