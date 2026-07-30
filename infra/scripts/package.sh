@@ -18,11 +18,11 @@ TEMPLATE_DIR="${INFRA_DIR}/templates"
 BUILD_DIR="${REPO_ROOT}/build"
 
 ACQUISITION_DIR="${REPO_ROOT}/app/acquisition"
-LAMBDA_SOURCE="${ACQUISITION_DIR}/iata_sales_acquisition.py"
-LAMBDA_ZIP="iata_sales_acquisition.zip"
+LAMBDA_SOURCE="${ACQUISITION_DIR}/yt_sales_acquisition.py"
+LAMBDA_ZIP="yt_sales_acquisition.zip"
 
-LANDING_TO_MSK_SCRIPT="${REPO_ROOT}/app/glue/landing-to-msk/iata_sales_landing_to_msk.py"
-BRONZE_TO_SILVER_SCRIPT="${REPO_ROOT}/app/glue/bronze-to-silver/iata_sales_bronze_to_silver.py"
+LANDING_TO_MSK_SCRIPT="${REPO_ROOT}/app/glue/landing-to-msk/yt_sales_landing_to_msk.py"
+BRONZE_TO_SILVER_SCRIPT="${REPO_ROOT}/app/glue/bronze-to-silver/yt_sales_bronze_to_silver.py"
 
 JAR_DIR="${REPO_ROOT}/dependencies/glue/kafka"
 
@@ -174,7 +174,7 @@ mkdir -p "${BUILD_DIR}/lambda/acquisition"
 
 cp \
   "${LAMBDA_SOURCE}" \
-  "${BUILD_DIR}/lambda/acquisition/iata_sales_acquisition.py"
+  "${BUILD_DIR}/lambda/acquisition/yt_sales_acquisition.py"
 
 if [[ -f "${ACQUISITION_DIR}/requirements.txt" ]] \
   && [[ -s "${ACQUISITION_DIR}/requirements.txt" ]] \
@@ -207,12 +207,12 @@ log "Upload Glue scripts"
 
 aws s3 cp \
   "${LANDING_TO_MSK_SCRIPT}" \
-  "s3://${ARTIFACTS_BUCKET}/glue/scripts/iata_sales_landing_to_msk.py" \
+  "s3://${ARTIFACTS_BUCKET}/glue/scripts/yt_sales_landing_to_msk.py" \
   --region "${AWS_REGION}"
 
 aws s3 cp \
   "${BRONZE_TO_SILVER_SCRIPT}" \
-  "s3://${ARTIFACTS_BUCKET}/glue/scripts/iata_sales_bronze_to_silver.py" \
+  "s3://${ARTIFACTS_BUCKET}/glue/scripts/yt_sales_bronze_to_silver.py" \
   --region "${AWS_REGION}"
 
 # ============================================================
@@ -276,13 +276,13 @@ aws s3api head-object \
 
 aws s3api head-object \
   --bucket "${ARTIFACTS_BUCKET}" \
-  --key "glue/scripts/iata_sales_landing_to_msk.py" \
+  --key "glue/scripts/yt_sales_landing_to_msk.py" \
   --region "${AWS_REGION}" \
   >/dev/null
 
 aws s3api head-object \
   --bucket "${ARTIFACTS_BUCKET}" \
-  --key "glue/scripts/iata_sales_bronze_to_silver.py" \
+  --key "glue/scripts/yt_sales_bronze_to_silver.py" \
   --region "${AWS_REGION}" \
   >/dev/null
 

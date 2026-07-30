@@ -216,7 +216,7 @@ Resources:
     Properties:
       CatalogId: !Ref AWS::AccountId
       DatabaseInput:
-        Name: iata_sales_iac_bronze
+        Name: yt_sales_iac_bronze
         Description: Bronze Iceberg database for raw yt sales records
         LocationUri: !Sub 's3://${LakehouseBucket}/bronze/' 
 
@@ -230,7 +230,7 @@ Resources:
     Properties:
       CatalogId: !Ref AWS::AccountId
       DatabaseInput:
-        Name: iata_sales_iac_silver
+        Name: yt_sales_iac_silver
         Description: Silver Iceberg database for validated yt sales records
         LocationUri: !Sub 's3://${LakehouseBucket}/silver/' 
 
@@ -244,7 +244,7 @@ Resources:
     Properties:
       CatalogId: !Ref AWS::AccountId
       DatabaseInput:
-        Name: iata_sales_iac_quarantine
+        Name: yt_sales_iac_quarantine
         Description: Quarantine database for invalid or rejected sales records
         LocationUri: !Sub 's3://${LakehouseBucket}/quarantine/' 
 

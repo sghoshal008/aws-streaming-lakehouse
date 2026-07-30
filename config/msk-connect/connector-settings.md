@@ -96,7 +96,7 @@ yt-sales-iac-errors
 Target table:
 
 ```text
-iata_sales_iac_bronze.sales_raw
+yt_sales_iac_bronze.sales_raw
 ```
 
 Warehouse:
@@ -147,7 +147,7 @@ connector.class=org.apache.iceberg.connect.IcebergSinkConnector
 tasks.max=2
 topics=yt-sales-iac-records
 
-iceberg.tables=iata_sales_iac_bronze.sales_raw
+iceberg.tables=yt_sales_iac_bronze.sales_raw
 iceberg.tables.auto-create-enabled=false
 iceberg.tables.evolve-schema-enabled=false
 

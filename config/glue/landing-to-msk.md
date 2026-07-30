@@ -17,12 +17,12 @@
 ## Script
 
 - Script location: `s3://yt-sales-iac-artifacts-<ACCOUNT_ID>/glue/scripts/`
-- Script name: `iata_sales_landing_to_msk.py`
+- Script name: `yt_sales_landing_to_msk.py`
 
 Full script URI:
 
 ```text
-s3://yt-sales-iac-artifacts-<ACCOUNT_ID>/glue/scripts/iata_sales_landing_to_msk.py
+s3://yt-sales-iac-artifacts-<ACCOUNT_ID>/glue/scripts/yt_sales_landing_to_msk.py
 ```
 
 ## Extra JARs

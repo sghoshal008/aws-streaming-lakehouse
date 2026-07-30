@@ -11,6 +11,6 @@
   "MainTopic": "yt-sales-iac-records",
   "ErrorTopic": "yt-sales-iac-errors",
   "IcebergControlTopic": "yt-sales-iac-control-iceberg",
-  "BronzeTable": "iata_sales_iac_bronze.sales_raw",
-  "SilverTable": "iata_sales_iac_silver.sales"
+  "BronzeTable": "yt_sales_iac_bronze.sales_raw",
+  "SilverTable": "yt_sales_iac_silver.sales"
 }

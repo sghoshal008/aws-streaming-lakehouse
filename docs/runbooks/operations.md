@@ -167,20 +167,20 @@ aws dynamodb scan \
 ## Athena / Iceberg
 
 ```sql
-SELECT COUNT(*) FROM iata_sales_iac_bronze.sales_raw;
-SELECT COUNT(*) FROM iata_sales_iac_silver.sales;
+SELECT COUNT(*) FROM yt_sales_iac_bronze.sales_raw;
+SELECT COUNT(*) FROM yt_sales_iac_silver.sales;
 ```
 
 ```sql
-SELECT * FROM iata_sales_iac_bronze.sales_raw LIMIT 20;
-SELECT * FROM iata_sales_iac_silver.sales LIMIT 20;
+SELECT * FROM yt_sales_iac_bronze.sales_raw LIMIT 20;
+SELECT * FROM yt_sales_iac_silver.sales LIMIT 20;
 ```
 
 Bronze duplicates:
 
 ```sql
 SELECT order_id, COUNT(*) AS cnt
-FROM iata_sales_iac_bronze.sales_raw
+FROM yt_sales_iac_bronze.sales_raw
 GROUP BY order_id
 HAVING COUNT(*) > 1
 ORDER BY cnt DESC
@@ -191,7 +191,7 @@ Silver dedup check:
 
 ```sql
 SELECT order_id, COUNT(*) AS cnt
-FROM iata_sales_iac_silver.sales
+FROM yt_sales_iac_silver.sales
 GROUP BY order_id
 HAVING COUNT(*) > 1
 ORDER BY cnt DESC;
@@ -201,13 +201,13 @@ Iceberg snapshots:
 
 ```sql
 SELECT *
-FROM iata_sales_iac_bronze."sales_raw$snapshots"
+FROM yt_sales_iac_bronze."sales_raw$snapshots"
 ORDER BY committed_at DESC;
 ```
 
 ```sql
 SELECT *
-FROM iata_sales_iac_silver."sales$snapshots"
+FROM yt_sales_iac_silver."sales$snapshots"
 ORDER BY committed_at DESC;
 ```
 
@@ -218,7 +218,7 @@ SELECT region,
        COUNT(*) AS orders,
        SUM(total_revenue) AS revenue,
        SUM(total_profit) AS profit
-FROM iata_sales_iac_silver.sales
+FROM yt_sales_iac_silver.sales
 GROUP BY region
 ORDER BY revenue DESC;
 ```

@@ -112,7 +112,7 @@ def propose_pytest_tests(path: str) -> str:
 
 
 @tool
-def find_deduplication_logic(path: str = "app/glue/bronze-to-silver/iata_sales_bronze_to_silver.py") -> str:
+def find_deduplication_logic(path: str = "app/glue/bronze-to-silver/yt_sales_bronze_to_silver.py") -> str:
     """Find and explain deduplication logic in a specific file, including business keys and ordering expressions."""
     source = services().repository.read_file(path)
     lines = source.splitlines()

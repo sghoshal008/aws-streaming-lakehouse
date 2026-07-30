@@ -4,7 +4,7 @@ REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 cd "${REPO_ROOT}"
 
 echo "Compiling Python sources..."
-python3 -m py_compile app/acquisition/iata_sales_acquisition.py app/glue/landing-to-msk/iata_sales_landing_to_msk.py app/glue/bronze-to-silver/iata_sales_bronze_to_silver.py
+python3 -m py_compile app/acquisition/yt_sales_acquisition.py app/glue/landing-to-msk/yt_sales_landing_to_msk.py app/glue/bronze-to-silver/yt_sales_bronze_to_silver.py
 
 echo "Checking shell syntax..."
 for f in infra/scripts/*.sh; do bash -n "$f"; done

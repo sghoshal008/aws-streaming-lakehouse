@@ -184,7 +184,7 @@ iceberg.catalog.warehouse=s3://yt-sales-iac-lakehouse-878670310452/bronze
 Glue database:
 
 ```text
-iata_sales_iac_bronze
+yt_sales_iac_bronze
 ```
 
 Table:
@@ -196,13 +196,13 @@ sales_raw
 Fully qualified Iceberg table:
 
 ```text
-iata_sales_iac_bronze.sales_raw
+yt_sales_iac_bronze.sales_raw
 ```
 
 Connector configuration:
 
 ```properties
-iceberg.tables=iata_sales_iac_bronze.sales_raw
+iceberg.tables=yt_sales_iac_bronze.sales_raw
 ```
 
 ---
@@ -269,7 +269,7 @@ iceberg.catalog.io-impl=org.apache.iceberg.aws.s3.S3FileIO
 
 iceberg.catalog.warehouse=s3://yt-sales-iac-lakehouse-878670310452/bronze
 
-iceberg.tables=iata_sales_iac_bronze.sales_raw
+iceberg.tables=yt_sales_iac_bronze.sales_raw
 
 iceberg.tables.auto-create-enabled=false
 iceberg.tables.evolve-schema-enabled=false
@@ -417,7 +417,7 @@ The final CloudFormation implementation should create/manage:
 | MSK Cluster | `yt-sales-iac-msk` |
 | Kafka Source Topic | `yt-sales-iac-records` |
 | Iceberg Control Topic | `yt-sales-iac-control-iceberg` |
-| Glue Database | `iata_sales_iac_bronze` |
+| Glue Database | `yt_sales_iac_bronze` |
 | Iceberg Table | `sales_raw` |
 | Lakehouse Bucket | `yt-sales-iac-lakehouse-878670310452` |
 
@@ -447,7 +447,7 @@ Consume
 yt-sales-iac-records
                  ↓
 Write
-iata_sales_iac_bronze.sales_raw
+yt_sales_iac_bronze.sales_raw
                  ↓
 S3 Iceberg Bronze
 ```

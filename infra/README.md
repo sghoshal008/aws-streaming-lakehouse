@@ -53,9 +53,9 @@ FULL DEPLOYMENT FLOW
 │   │     └── infra/templates/monitoring.yaml
 │   │
 │   ├── Validate runtime source files
-│   │     ├── app/acquisition/iata_sales_acquisition.py
-│   │     ├── app/glue/landing-to-msk/iata_sales_landing_to_msk.py
-│   │     └── app/glue/bronze-to-silver/iata_sales_bronze_to_silver.py
+│   │     ├── app/acquisition/yt_sales_acquisition.py
+│   │     ├── app/glue/landing-to-msk/yt_sales_landing_to_msk.py
+│   │     └── app/glue/bronze-to-silver/yt_sales_bronze_to_silver.py
 │   │
 │   ├── Validate Glue Kafka dependencies
 │   │     └── dependencies/glue/kafka/
@@ -140,10 +140,10 @@ FULL DEPLOYMENT FLOW
 │   │     ├── DynamoDB ingestion-control table
 │   │     │
 │   │     ├── Glue Bronze database
-│   │     │     iata_sales_iac_bronze
+│   │     │     yt_sales_iac_bronze
 │   │     │
 │   │     ├── Glue Silver database
-│   │     │     iata_sales_iac_silver
+│   │     │     yt_sales_iac_silver
 │   │     │
 │   │     └── Glue Quarantine database
 │   │
@@ -208,32 +208,32 @@ FULL DEPLOYMENT FLOW
 │   │
 │   ├── Package Acquisition Lambda
 │   │     Source:
-│   │       app/acquisition/iata_sales_acquisition.py
+│   │       app/acquisition/yt_sales_acquisition.py
 │   │
 │   │     Output:
-│   │       build/iata_sales_acquisition.zip
+│   │       build/yt_sales_acquisition.zip
 │   │
 │   │     Upload:
 │   │       s3://yt-sales-iac-artifacts-<ACCOUNT_ID>/
-│   │           lambda/iata_sales_acquisition.zip
+│   │           lambda/yt_sales_acquisition.zip
 │   │
 │   ├── Upload Landing → MSK Glue script
 │   │     Local file:
 │   │       app/glue/landing-to-msk/
-│   │           iata_sales_landing_to_msk.py
+│   │           yt_sales_landing_to_msk.py
 │   │
 │   │     Upload:
 │   │       s3://yt-sales-iac-artifacts-<ACCOUNT_ID>/
-│   │           glue/scripts/iata_sales_landing_to_msk.py
+│   │           glue/scripts/yt_sales_landing_to_msk.py
 │   │
 │   ├── Upload Bronze → Silver Glue script
 │   │     Local file:
 │   │       app/glue/bronze-to-silver/
-│   │           iata_sales_bronze_to_silver.py
+│   │           yt_sales_bronze_to_silver.py
 │   │
 │   │     Upload:
 │   │       s3://yt-sales-iac-artifacts-<ACCOUNT_ID>/
-│   │           glue/scripts/iata_sales_bronze_to_silver.py
+│   │           glue/scripts/yt_sales_bronze_to_silver.py
 │   │
 │   ├── Upload Glue Kafka JARs
 │   │     Local:
@@ -312,7 +312,7 @@ FULL DEPLOYMENT FLOW
 │   │       infra/sql/iceberg/002-set-bronze-data-path.sql
 │   │
 │   │     Result:
-│   │       iata_sales_iac_bronze.sales_raw
+│   │       yt_sales_iac_bronze.sales_raw
 │   │
 │   ├── Bootstrap Silver Iceberg table
 │   │     Files:
@@ -320,7 +320,7 @@ FULL DEPLOYMENT FLOW
 │   │       infra/sql/iceberg/004-set-silver-data-path.sql
 │   │
 │   │     Result:
-│   │       iata_sales_iac_silver.sales
+│   │       yt_sales_iac_silver.sales
 │   │
 │   ├── Deploy / enable MSK Connect
 │   │     Template:
@@ -346,7 +346,7 @@ FULL DEPLOYMENT FLOW
 │   │     ├── Acquisition Lambda log group
 │   │     ├── Acquisition Lambda
 │   │     │     Code:
-│   │     │       app/acquisition/iata_sales_acquisition.py
+│   │     │       app/acquisition/yt_sales_acquisition.py
 │   │     │
 │   │     ├── Glue MSK network connection
 │   │     │     yt-sales-iac-msk-connection
@@ -355,7 +355,7 @@ FULL DEPLOYMENT FLOW
 │   │     ├── Landing → MSK Glue job
 │   │     │     Script:
 │   │     │       app/glue/landing-to-msk/
-│   │     │           iata_sales_landing_to_msk.py
+│   │     │           yt_sales_landing_to_msk.py
 │   │     │
 │   │     │     Purpose:
 │   │     │       Read landing data
@@ -368,7 +368,7 @@ FULL DEPLOYMENT FLOW
 │   │     └── Bronze → Silver Glue job
 │   │           Script:
 │   │             app/glue/bronze-to-silver/
-│   │                 iata_sales_bronze_to_silver.py
+│   │                 yt_sales_bronze_to_silver.py
 │   │
 │   │           Purpose:
 │   │             Bronze Iceberg
@@ -455,7 +455,7 @@ FULL DEPLOYMENT FLOW
       ▼
     Bronze Iceberg
       │
-      └── iata_sales_iac_bronze.sales_raw
+      └── yt_sales_iac_bronze.sales_raw
       │
       ▼
     Bronze → Silver Glue Job
@@ -467,7 +467,7 @@ FULL DEPLOYMENT FLOW
       ▼
     Silver Iceberg
       │
-      └── iata_sales_iac_silver.sales
+      └── yt_sales_iac_silver.sales
       │
       ▼
     Glue Data Catalog

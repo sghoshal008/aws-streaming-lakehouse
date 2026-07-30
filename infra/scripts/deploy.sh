@@ -508,15 +508,15 @@ if [[ "${PHASE}" == "phase2" ]]; then
 
     require_s3_object \
         "${ARTIFACTS_BUCKET}" \
-        "lambda/iata_sales_acquisition.zip"
+        "lambda/yt_sales_acquisition.zip"
 
     require_s3_object \
         "${ARTIFACTS_BUCKET}" \
-        "glue/scripts/iata_sales_landing_to_msk.py"
+        "glue/scripts/yt_sales_landing_to_msk.py"
 
     require_s3_object \
         "${ARTIFACTS_BUCKET}" \
-        "glue/scripts/iata_sales_bronze_to_silver.py"
+        "glue/scripts/yt_sales_bronze_to_silver.py"
 
     require_s3_object \
         "${ARTIFACTS_BUCKET}" \
@@ -732,34 +732,34 @@ if [[ "${PHASE}" == "phase2" ]]; then
 
 
     echo "Checking:"
-    echo "  iata_sales_iac_bronze.sales_raw"
+    echo "  yt_sales_iac_bronze.sales_raw"
 
 
     aws glue get-table \
         --region "${AWS_REGION}" \
-        --database-name iata_sales_iac_bronze \
+        --database-name yt_sales_iac_bronze \
         --name sales_raw \
         >/dev/null
 
 
     echo "Verified:"
-    echo "  iata_sales_iac_bronze.sales_raw"
+    echo "  yt_sales_iac_bronze.sales_raw"
 
 
     echo
     echo "Checking:"
-    echo "  iata_sales_iac_silver.sales"
+    echo "  yt_sales_iac_silver.sales"
 
 
     aws glue get-table \
         --region "${AWS_REGION}" \
-        --database-name iata_sales_iac_silver \
+        --database-name yt_sales_iac_silver \
         --name sales \
         >/dev/null
 
 
     echo "Verified:"
-    echo "  iata_sales_iac_silver.sales"
+    echo "  yt_sales_iac_silver.sales"
 
 
     echo
@@ -811,11 +811,11 @@ if [[ "${PHASE}" == "phase2" ]]; then
     echo
 
     echo "Bronze Iceberg table:"
-    echo "  iata_sales_iac_bronze.sales_raw"
+    echo "  yt_sales_iac_bronze.sales_raw"
     echo
 
     echo "Silver Iceberg table:"
-    echo "  iata_sales_iac_silver.sales"
+    echo "  yt_sales_iac_silver.sales"
     echo
 
     echo "Lakehouse bucket:"

@@ -50,13 +50,13 @@ Kafka topics:
 Amazon MSK Connect runs the Apache Iceberg Sink Connector. The custom plugin/JAR bundle uses the Glue Data Catalog and S3-backed Iceberg storage (`S3FileIO`) and tracks Kafka consumer offsets.
 
 Bronze:
-- Database: `iata_sales_iac_bronze`
+- Database: `yt_sales_iac_bronze`
 - Table: `sales_raw`
 
 ## Bronze to Silver
 
 Silver:
-- Database: `iata_sales_iac_silver`
+- Database: `yt_sales_iac_silver`
 - Table: `sales`
 
 The separate Bronze-to-Silver workflow:

@@ -685,11 +685,11 @@ create_environment() {
 
     aws glue get-table \
         --region "${AWS_REGION}" \
-        --database-name iata_sales_iac_bronze \
+        --database-name yt_sales_iac_bronze \
         --name sales_raw \
         >/dev/null
 
-    echo "  OK: iata_sales_iac_bronze.sales_raw"
+    echo "  OK: yt_sales_iac_bronze.sales_raw"
 
 
     echo
@@ -697,11 +697,11 @@ create_environment() {
 
     aws glue get-table \
         --region "${AWS_REGION}" \
-        --database-name iata_sales_iac_silver \
+        --database-name yt_sales_iac_silver \
         --name sales \
         >/dev/null
 
-    echo "  OK: iata_sales_iac_silver.sales"
+    echo "  OK: yt_sales_iac_silver.sales"
 
 
     echo
@@ -747,10 +747,10 @@ create_environment() {
     echo "  ${AWS_REGION}"
     echo
     echo "Bronze:"
-    echo "  iata_sales_iac_bronze.sales_raw"
+    echo "  yt_sales_iac_bronze.sales_raw"
     echo
     echo "Silver:"
-    echo "  iata_sales_iac_silver.sales"
+    echo "  yt_sales_iac_silver.sales"
     echo
     echo "Next:"
     echo "  Run the ingestion Step Functions workflow."

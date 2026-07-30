@@ -535,7 +535,7 @@ Resources:
 
             "Ingestion Pipeline Failed": {
               "Type": "Fail",
-              "Error": "IATASalesIngestionFailed",
+              "Error": "ytSalesIngestionFailed",
               "Cause": "yt Sales ingestion pipeline failed"
             }
           }

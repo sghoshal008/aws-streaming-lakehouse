@@ -24,13 +24,13 @@ S3-backed Iceberg tables through AWS services rather than connecting to MSK.
 
 ```text
 s3://yt-sales-iac-artifacts-<ACCOUNT_ID>/
-glue/scripts/iata_sales_bronze_to_silver.py
+glue/scripts/yt_sales_bronze_to_silver.py
 ```
 
 Source:
 
 ```text
-app/glue/bronze-to-silver/iata_sales_bronze_to_silver.py
+app/glue/bronze-to-silver/yt_sales_bronze_to_silver.py
 ```
 
 ## Job arguments
@@ -38,10 +38,10 @@ app/glue/bronze-to-silver/iata_sales_bronze_to_silver.py
 Static CloudFormation arguments:
 
 ```text
---BRONZE_TABLE=glue_catalog.iata_sales_iac_bronze.sales_raw
+--BRONZE_TABLE=glue_catalog.yt_sales_iac_bronze.sales_raw
 --CONTROL_TABLE=yt-sales-iac-ingestion-control
 --QUARANTINE_PATH=s3://yt-sales-iac-lakehouse-<ACCOUNT_ID>/quarantine/sales/
---SILVER_TABLE=glue_catalog.iata_sales_iac_silver.sales
+--SILVER_TABLE=glue_catalog.yt_sales_iac_silver.sales
 --datalake-formats=iceberg
 ```
 
@@ -172,7 +172,7 @@ silver_source
 and merged into:
 
 ```text
-glue_catalog.iata_sales_iac_silver.sales
+glue_catalog.yt_sales_iac_silver.sales
 ```
 
 Business key:

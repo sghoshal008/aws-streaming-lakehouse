@@ -22,7 +22,7 @@ if "proposal" not in st.session_state:
 with st.sidebar:
     selected_file = st.text_input(
         "Selected repository file",
-        "app/glue/bronze-to-silver/iata_sales_bronze_to_silver.py",
+        "app/glue/bronze-to-silver/yt_sales_bronze_to_silver.py",
     )
     st.caption(f"Thread: {st.session_state.thread_id[:8]}")
     if st.button("New conversation"):

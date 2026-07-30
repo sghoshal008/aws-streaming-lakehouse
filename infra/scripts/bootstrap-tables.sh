@@ -54,6 +54,6 @@ done
 
 echo
 echo "Verifying Glue Catalog tables..."
-aws glue get-table --region "${AWS_REGION}" --database-name iata_sales_iac_bronze --name sales_raw >/dev/null
-aws glue get-table --region "${AWS_REGION}" --database-name iata_sales_iac_silver --name sales >/dev/null
+aws glue get-table --region "${AWS_REGION}" --database-name yt_sales_iac_bronze --name sales_raw >/dev/null
+aws glue get-table --region "${AWS_REGION}" --database-name yt_sales_iac_silver --name sales >/dev/null
 echo "Bronze and Silver Iceberg tables are ready."

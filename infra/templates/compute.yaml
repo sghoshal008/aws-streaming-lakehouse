@@ -180,7 +180,7 @@ Resources:
         !Ref LambdaRuntime
 
       Handler:
-        iata_sales_acquisition.lambda_handler
+        yt_sales_acquisition.lambda_handler
 
       Role:
         !Ref AcquisitionLambdaRoleArn
@@ -192,7 +192,7 @@ Resources:
           !Ref ArtifactsBucketName
 
         S3Key:
-          lambda/iata_sales_acquisition.zip
+          lambda/yt_sales_acquisition.zip
 
       MemorySize: 2048
 
@@ -360,7 +360,7 @@ Resources:
         PythonVersion: '3'
 
         ScriptLocation:
-          !Sub 's3://${ArtifactsBucketName}/glue/scripts/iata_sales_landing_to_msk.py'
+          !Sub 's3://${ArtifactsBucketName}/glue/scripts/yt_sales_landing_to_msk.py'
 
 
       GlueVersion: '5.1'
@@ -542,7 +542,7 @@ Resources:
         PythonVersion: '3'
 
         ScriptLocation:
-          !Sub 's3://${ArtifactsBucketName}/glue/scripts/iata_sales_bronze_to_silver.py'
+          !Sub 's3://${ArtifactsBucketName}/glue/scripts/yt_sales_bronze_to_silver.py'
 
 
       GlueVersion: '5.1'
@@ -587,7 +587,7 @@ Resources:
           python
 
         '--BRONZE_TABLE':
-          glue_catalog.iata_sales_iac_bronze.sales_raw
+          glue_catalog.yt_sales_iac_bronze.sales_raw
 
         '--CONTROL_TABLE':
           !Ref IngestionControlTableName
@@ -599,7 +599,7 @@ Resources:
           !Sub 's3://${LakehouseBucketName}/quarantine/sales/'
 
         '--SILVER_TABLE':
-          glue_catalog.iata_sales_iac_silver.sales
+          glue_catalog.yt_sales_iac_silver.sales
 
         '--datalake-formats':
           iceberg

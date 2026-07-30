@@ -68,7 +68,7 @@ Amazon MSK: yt-sales-iac-records
 MSK Connect + Apache Iceberg custom plugin
     |
     v
-Bronze Iceberg: iata_sales_iac_bronze.sales_raw
+Bronze Iceberg: yt_sales_iac_bronze.sales_raw
     |
     v
 Bronze -> Silver Step Function
@@ -78,7 +78,7 @@ Glue Spark: validation + typing + dedup + MERGE
     |                         |
     |                         `--> quarantine/
     v
-Silver Iceberg: iata_sales_iac_silver.sales
+Silver Iceberg: yt_sales_iac_silver.sales
     |
     v
 Amazon Athena
@@ -383,7 +383,7 @@ connector.class=org.apache.iceberg.connect.IcebergSinkConnector
 tasks.max=2
 topics=yt-sales-iac-records
 
-iceberg.tables=iata_sales_iac_bronze.sales_raw
+iceberg.tables=yt_sales_iac_bronze.sales_raw
 iceberg.tables.auto-create-enabled=false
 iceberg.tables.evolve-schema-enabled=false
 
@@ -438,7 +438,7 @@ infra/sql/iceberg/
 
 MSK Connect table auto-creation and schema evolution are disabled so the schema is deliberate and reviewable.
 
-### 9.1 Bronze — `iata_sales_iac_bronze.sales_raw`
+### 9.1 Bronze — `yt_sales_iac_bronze.sales_raw`
 
 Bronze preserves the source representation. Business fields remain strings.
 
@@ -480,7 +480,7 @@ Storage:
 S3 + Parquet + ZSTD + Iceberg metadata
 ```
 
-### 9.2 Silver — `iata_sales_iac_silver.sales`
+### 9.2 Silver — `yt_sales_iac_silver.sales`
 
 | Column | Silver type |
 |---|---|
@@ -727,7 +727,7 @@ MSK Connect consumes asynchronously. Check Bronze after the connector commit:
 
 ```sql
 SELECT count(*)
-FROM iata_sales_iac_bronze.sales_raw;
+FROM yt_sales_iac_bronze.sales_raw;
 ```
 
 ### 12.2 Start Bronze-to-Silver
@@ -751,7 +751,7 @@ Verify:
 
 ```sql
 SELECT count(*)
-FROM iata_sales_iac_silver.sales;
+FROM yt_sales_iac_silver.sales;
 ```
 
 Example business query:
@@ -762,7 +762,7 @@ SELECT
     count(*) AS orders,
     sum(total_revenue) AS revenue,
     sum(total_profit) AS profit
-FROM iata_sales_iac_silver.sales
+FROM yt_sales_iac_silver.sales
 GROUP BY region
 ORDER BY revenue DESC;
 ```
@@ -927,13 +927,13 @@ verifies key project resources are gone
 .
 ├── app/
 │   ├── acquisition/
-│   │   ├── iata_sales_acquisition.py
+│   │   ├── yt_sales_acquisition.py
 │   │   └── requirements.txt
 │   └── glue/
 │       ├── landing-to-msk/
-│       │   └── iata_sales_landing_to_msk.py
+│       │   └── yt_sales_landing_to_msk.py
 │       └── bronze-to-silver/
-│           └── iata_sales_bronze_to_silver.py
+│           └── yt_sales_bronze_to_silver.py
 │
 ├── config/
 │   ├── glue/

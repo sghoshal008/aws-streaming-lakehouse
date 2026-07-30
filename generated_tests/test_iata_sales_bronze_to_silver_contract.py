@@ -1,4 +1,4 @@
-"""Generated repository-contract tests for app/glue/bronze-to-silver/iata_sales_bronze_to_silver.py.
+"""Generated repository-contract tests for app/glue/bronze-to-silver/yt_sales_bronze_to_silver.py.
 
 These tests are intentionally lightweight: they validate the selected Glue job's
 Python structure and expected Spark operations without requiring Java or PySpark.
@@ -11,7 +11,7 @@ from pathlib import Path
 
 
 REPOSITORY_ROOT = Path(__file__).resolve().parents[1]
-TARGET = REPOSITORY_ROOT / 'app/glue/bronze-to-silver/iata_sales_bronze_to_silver.py'
+TARGET = REPOSITORY_ROOT / 'app/glue/bronze-to-silver/yt_sales_bronze_to_silver.py'
 EXPECTED_SPARK_OPERATIONS = ['filter', 'withColumn']
 EXPECTED_FUNCTIONS = ['utc_now', 'get_last_snapshot_id', 'save_watermark', 'save_run_summary', 'get_current_snapshot_id', 'snapshot_exists', 'main']
 RUNTIME_TOKENS = (
