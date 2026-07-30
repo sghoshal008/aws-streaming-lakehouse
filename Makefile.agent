@@ -1,0 +1,9 @@
+.PHONY: agent-install agent-test agent-api agent-ui
+agent-install:
+	python -m pip install -r requirements-agent.txt
+agent-test:
+	python -m pytest tests/engineering_agent -q
+agent-api:
+	uvicorn app.engineering_agent.api.main:app --reload --port 8000
+agent-ui:
+	streamlit run app/engineering_agent/ui/streamlit_app.py --server.port 8501

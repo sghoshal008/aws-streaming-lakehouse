@@ -14,6 +14,20 @@ The source is a large external ZIP containing approximately two million sales re
 6. expose Bronze and Silver through Amazon Athena;
 7. provide reproducible Infrastructure as Code, monitoring, failure handling and an operational control trail.
 
+## Engineering Copilot
+
+The repository includes an optional AI-assisted engineering application built with:
+
+- OpenAI tool calling
+- LangChain ReAct-style agent
+- FastAPI
+- FastMCP
+- Streamlit
+- pytest
+- optional read-only AWS inspection
+
+See [Engineering Copilot documentation](docs/engineering-copilot.md).
+
 Source dataset:
 
 ```text

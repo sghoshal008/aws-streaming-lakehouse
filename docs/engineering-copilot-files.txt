@@ -1,0 +1,16 @@
+app/engineering_agent/agent/react_agent.py
+app/engineering_agent/api/main.py
+app/engineering_agent/mcp/server.py
+app/engineering_agent/services/repository_service.py
+app/engineering_agent/services/planning_service.py
+app/engineering_agent/services/test_service.py
+app/engineering_agent/tools/repository_tools.py
+app/engineering_agent/tools/test_tools.py
+app/engineering_agent/tools/aws_tools.py
+app/engineering_agent/ui/streamlit_app.py
+tests/engineering_agent/
+generated_tests/
+requirements-agent.txt
+.env.agent.example
+Makefile.agent
+docs/engineering-copilot-react.md

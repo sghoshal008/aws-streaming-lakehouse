@@ -1,0 +1,12 @@
+fastapi>=0.116,<1
+uvicorn[standard]>=0.35,<1
+streamlit>=1.47,<2
+requests>=2.32,<3
+pydantic>=2.11,<3
+langchain>=1,<2
+langchain-openai>=1,<2
+langgraph>=1,<2
+mcp>=1.12,<2
+boto3>=1.39,<2
+pytest>=8.4,<9
+pytest-cov>=6.2,<8
